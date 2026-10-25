@@ -1,0 +1,19 @@
+{{define "node"}}
+<div class="node{{if .Leaf}} leaf{{end}}" data-path="{{.Path}}">
+  <div class="row">
+    {{if .Leaf}}<span class="tg"></span>{{else}}<button type="button" class="tg" data-act="toggle" aria-label="Collapse or expand {{.Label}}"></button>{{end}}
+    <input class="nm" data-k="name" value="{{.Label}}" size="{{.NameSize}}" aria-label="Element name" spellcheck="false">
+    {{range .NS}}<span class="ns" title="{{.URI}}">{{.Decl}}</span>{{end}}
+    {{range .Attrs}}<label class="attr"><span class="an">{{.Name}}</span><input data-k="attr" data-i="{{.Index}}" value="{{.Value}}" size="{{.Size}}" spellcheck="false"></label>{{end}}
+    {{if .Leaf}}
+      {{if .Multiline}}<textarea class="txt" data-k="text" rows="{{.Rows}}" aria-label="Text of {{.Label}}" spellcheck="false">{{.Text}}</textarea>
+      {{else}}<input class="txt" data-k="text" value="{{.Text}}" placeholder="empty" aria-label="Text of {{.Label}}" spellcheck="false">{{end}}
+    {{else if .Text}}<input class="txt" data-k="text" value="{{.Text}}" aria-label="Text of {{.Label}}" spellcheck="false">{{end}}
+    {{if not .Root}}<span class="acts">
+      <button type="button" data-act="dup">Duplicate</button>
+      <button type="button" data-act="delete">Delete</button>
+    </span>{{end}}
+  </div>
+  {{if .Children}}<div class="kids">{{range .Children}}{{template "node" .}}{{end}}</div>{{end}}
+</div>
+{{end}}

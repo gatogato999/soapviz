@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>soapviz</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="bar">
+  <h1>soapviz</h1>
+  <span id="status" class="status" role="status" aria-live="polite"></span>
+  <button type="button" id="sample" class="ghost">Load sample</button>
+</header>
+
+<main class="panes">
+  <section class="pane" aria-labelledby="h-xml">
+    <h2 id="h-xml">XML</h2>
+    <textarea id="xml" spellcheck="false" placeholder="Paste a SOAP request or response here"></textarea>
+  </section>
+
+  <section class="pane" aria-labelledby="h-tree">
+    <h2 id="h-tree">Tree</h2>
+    <div id="tree" class="tree"><p class="empty">Paste XML to see it here. Edit values in place; changes flow back into the XML.</p></div>
+  </section>
+
+  <section class="pane" aria-labelledby="h-go">
+    <h2 id="h-go">Go</h2>
+    <form class="opts" id="opts" onsubmit="return false">
+      <label><input type="checkbox" id="o-env"> Include Envelope</label>
+      <label><input type="checkbox" id="o-ns"> Namespaces in xml tags</label>
+      <label><input type="checkbox" id="o-json"> json tags</label>
+      <label>Key case
+        <select id="o-case" disabled>
+          <option value="none">as written</option>
+          <option value="snake" selected>snake_case</option>
+          <option value="camel">camelCase</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="o-omit" disabled> json omitempty on optional</label>
+      <label>Root type <input type="text" id="o-root" placeholder="auto" size="14"></label>
+      <label>Package <input type="text" id="o-pkg" placeholder="none" size="10"></label>
+    </form>
+    <div class="codebar">
+      <button type="button" id="copy">Copy</button>
+      <span id="code-err" class="err" role="alert"></span>
+    </div>
+    <pre id="code" class="code"></pre>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
