@@ -3,11 +3,53 @@
 const $ = (s) => document.querySelector(s);
 const xmlEl = $("#xml"), treeEl = $("#tree"), codeEl = $("#code");
 const statusEl = $("#status"), codeErrEl = $("#code-err"), hlEl = $("#hl");
+const panes = $(".panes");
 let lastCode = ""; // plain text of the Go output, for copying
-const closed = new Set(); // paths of collapsed nodes, kept across re-renders
 
-let queue = Promise.resolve();
-let debounce;
+// ---------------------------------------------------------------------------
+// Preferences. The server only supplies defaults (config.ini). Whatever a
+// developer picks is saved in their own browser, so many people can share one
+// server with different themes, options and pane widths.
+// ---------------------------------------------------------------------------
+const PREFS_KEY = "soapviz.prefs";
+const PANES_KEY = "soapviz.panes";
+const THEMES = ["light", "dim", "dark"];
+const CASES = ["none", "snake", "camel"];
+const FALLBACK = {
+  theme: "dim",
+  gen: { envelope: false, namespaces: false, json: false, jsonCase: "snake", omitEmpty: false, root: "", pkg: "" },
+};
+let defaults = FALLBACK;
+
+function readSaved() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) || "null");
+    return p && typeof p === "object" ? p : {};
+  } catch {
+    return {};
+  }
+}
+
+// Saved values win, but only if they are valid; anything else falls back to the default.
+function effective(base, saved) {
+  const out = { theme: base.theme, gen: { ...base.gen } };
+  if (THEMES.includes(saved.theme)) out.theme = saved.theme;
+  const g = saved.gen || {};
+  for (const k of ["envelope", "namespaces", "json", "omitEmpty"]) if (typeof g[k] === "boolean") out.gen[k] = g[k];
+  if (CASES.includes(g.jsonCase)) out.gen.jsonCase = g.jsonCase;
+  for (const k of ["root", "pkg"]) if (typeof g[k] === "string") out.gen[k] = g[k];
+  return out;
+}
+
+function currentTheme() {
+  return document.documentElement.dataset.theme;
+}
+
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: currentTheme(), gen: genOpts() }));
+  } catch {}
+}
 
 function genOpts() {
   return {
@@ -21,17 +63,47 @@ function genOpts() {
   };
 }
 
+function showTheme(t) {
+  document.documentElement.dataset.theme = t;
+  document.querySelectorAll(".sw").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.theme === t)));
+}
+
+function showGen(g) {
+  $("#o-env").checked = g.envelope;
+  $("#o-ns").checked = g.namespaces;
+  $("#o-json").checked = g.json;
+  $("#o-case").value = g.jsonCase;
+  $("#o-omit").checked = g.omitEmpty;
+  $("#o-root").value = g.root;
+  $("#o-pkg").value = g.pkg;
+  syncJSONControls();
+}
+
+function syncJSONControls() {
+  const json = $("#o-json").checked;
+  $("#o-case").disabled = !json;
+  $("#o-omit").disabled = !json;
+}
+
 function setStatus(msg, bad) {
   statusEl.textContent = msg;
   statusEl.classList.toggle("bad", !!bad);
 }
 
-// Requests run one at a time, and the XML is read when the request starts,
-// so an edit never races with an earlier edit's result.
+// ---------------------------------------------------------------------------
+// Talking to the server. Requests run one at a time, and the XML is read when
+// a request starts, so an edit never races with an earlier edit's result.
+// ---------------------------------------------------------------------------
+let queue = Promise.resolve();
+let debounce;
+
 function run(edit, { renderTree = true } = {}) {
   queue = queue.then(() => send(edit, renderTree)).catch((e) => setStatus(String(e), true));
   return queue;
 }
+
+const EMPTY_TREE = '<p class="empty">Paste XML to see it here. Edit values in place; changes flow back into the XML.</p>';
+const closed = new Set(); // paths of collapsed nodes, kept across re-renders
 
 async function send(edit, renderTree) {
   const res = await fetch("/api/process", {
@@ -42,7 +114,7 @@ async function send(edit, renderTree) {
   const r = await res.json();
 
   if (r.empty) {
-    treeEl.innerHTML = '<p class="empty">Paste XML to see it here. Edit values in place; changes flow back into the XML.</p>';
+    treeEl.innerHTML = EMPTY_TREE;
     treeEl.classList.remove("stale");
     codeEl.textContent = "";
     lastCode = "";
@@ -65,8 +137,7 @@ async function send(edit, renderTree) {
     });
   }
   lastCode = r.code || "";
-  codeEl.innerHTML = r.codeHtml || ""; // server-escaped
-
+  codeEl.innerHTML = r.codeHtml || ""; // escaped by the server
   codeErrEl.textContent = r.codeError || "";
 }
 
@@ -82,7 +153,9 @@ treeEl.addEventListener("change", (e) => {
   const kind = t.dataset.k;
   const node = t.closest(".node");
   if (!kind || !node) return;
-  run({ op: kind, path: node.dataset.path, index: Number(t.dataset.i || 0), value: t.value }, { renderTree: false });
+  let value = t.value;
+  if (kind === "name" && t.dataset.prefix) value = t.dataset.prefix + ":" + value; // prefix is shown separately
+  run({ op: kind, path: node.dataset.path, index: Number(t.dataset.i || 0), value }, { renderTree: false });
 });
 
 treeEl.addEventListener("click", (e) => {
@@ -95,18 +168,23 @@ treeEl.addEventListener("click", (e) => {
     if (isClosed) closed.add(node.dataset.path); else closed.delete(node.dataset.path);
     return;
   }
-  if (act === "delete") closed.clear(); // paths shift after a delete or duplicate
-  if (act === "dup") closed.clear();
+  closed.clear(); // paths shift after a delete or duplicate
   run({ op: act, path: node.dataset.path, index: 0, value: "" });
 });
 
 // Options only change the Go output.
 $("#opts").addEventListener("input", () => {
-  const json = $("#o-json").checked;
-  $("#o-case").disabled = !json;
-  $("#o-omit").disabled = !json;
+  syncJSONControls();
+  savePrefs();
   run(null, { renderTree: false });
 });
+
+document.querySelectorAll(".sw").forEach((b) =>
+  b.addEventListener("click", () => {
+    showTheme(b.dataset.theme);
+    savePrefs();
+  })
+);
 
 $("#copy").addEventListener("click", async () => {
   const btn = $("#copy");
@@ -125,29 +203,36 @@ $("#sample").addEventListener("click", () => {
   run(null);
 });
 
-// ---- XML syntax highlighting (overlay under the textarea) ----
+$("#reset").addEventListener("click", () => {
+  try {
+    localStorage.removeItem(PREFS_KEY);
+    localStorage.removeItem(PANES_KEY);
+  } catch {}
+  showTheme(defaults.theme);
+  showGen(defaults.gen);
+  ["--c1", "--c2", "--c3"].forEach((v) => panes.style.removeProperty(v));
+  if (xmlEl.value.trim()) run(null, { renderTree: false });
+});
+
+// ---------------------------------------------------------------------------
+// XML syntax highlighting: a transparent textarea over a highlighted copy.
+// ---------------------------------------------------------------------------
 const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const span = (c, t) => `<span class="${c}">${esc(t)}</span>`;
 const ENT = /&(?:[A-Za-z_][\w.-]*|#\d+|#x[0-9A-Fa-f]+);/g;
-const TOKEN = new RegExp(
-  [
-    "(<!--[\\s\\S]*?-->)",                                  // 1 comment
-    "(<!\\[CDATA\\[[\\s\\S]*?\\]\\]>)",                      // 2 cdata
-    "(<\\?[\\s\\S]*?\\?>)",                                // 3 processing instruction
-    "<(\\/?)([^\\s<>\\/!?]+)((?:\"[^\"]*\"|'[^']*'|[^<>\"'])*?)(\\/?)>", // 4-7 tag
-  ].join("|"),
-  "g"
-);
+// groups: 1 comment, 2 cdata, 3 processing instruction, 4 "/" 5 name 6 attributes 7 "/" of a self-closing tag
+const TOKEN = /(<!--[\s\S]*?-->)|(<!\[CDATA\[[\s\S]*?\]\]>)|(<\?[\s\S]*?\?>)|<(\/?)([^\s<>\/!?]+)((?:"[^"]*"|'[^']*'|[^<>"'])*?)(\/?)>/g;
 const ATTR = /([^\s=]+)(\s*=\s*)("[^"]*"|'[^']*')/g;
 
 function text(t) {
+  const plain = (s) => (s.trim() ? span("x-txt", s) : esc(s));
   let out = "", last = 0, m;
   ENT.lastIndex = 0;
   while ((m = ENT.exec(t))) {
-    out += esc(t.slice(last, m.index)) + span("x-ent", m[0]);
+    out += plain(t.slice(last, m.index)) + span("x-ent", m[0]);
     last = m.index + m[0].length;
   }
-  return out + esc(t.slice(last));
+  return out + plain(t.slice(last));
 }
 
 function attrs(a) {
@@ -160,6 +245,11 @@ function attrs(a) {
   return out + esc(a.slice(last));
 }
 
+function tagName(n) {
+  const i = n.indexOf(":");
+  return i > 0 ? span("x-pfx", n.slice(0, i + 1)) + span("x-tag", n.slice(i + 1)) : span("x-tag", n);
+}
+
 function highlightXML(src) {
   let out = "", last = 0, m;
   TOKEN.lastIndex = 0;
@@ -167,9 +257,8 @@ function highlightXML(src) {
     out += text(src.slice(last, m.index));
     last = m.index + m[0].length;
     if (m[1] !== undefined) out += span("x-com", m[1]);
-    else if (m[2] !== undefined) out += span("x-pi", m[2]);
-    else if (m[3] !== undefined) out += span("x-pi", m[3]);
-    else out += span("x-br", "<" + m[4]) + span("x-tag", m[5]) + attrs(m[6]) + span("x-br", m[7] + ">");
+    else if (m[2] !== undefined || m[3] !== undefined) out += span("x-pi", m[2] ?? m[3]);
+    else out += span("x-br", "<" + m[4]) + tagName(m[5]) + attrs(m[6]) + span("x-br", m[7] + ">");
   }
   return out + text(src.slice(last));
 }
@@ -189,11 +278,11 @@ function setXML(v) {
 }
 xmlEl.addEventListener("scroll", syncScroll);
 
-// ---- resizable panes ----
-const panes = $(".panes");
+// ---------------------------------------------------------------------------
+// Resizable panes
+// ---------------------------------------------------------------------------
 const paneEls = [...panes.querySelectorAll(":scope > .pane")];
 const MIN_W = 180;
-const STORE = "soapviz.panes";
 
 function applyWidths(w) {
   w.forEach((v, i) => panes.style.setProperty(`--c${i + 1}`, `${v}fr`)); // px values work as fr ratios
@@ -202,7 +291,7 @@ function currentWidths() {
   return paneEls.map((p) => p.getBoundingClientRect().width);
 }
 function saveWidths(w) {
-  try { localStorage.setItem(STORE, JSON.stringify(w)); } catch {}
+  try { localStorage.setItem(PANES_KEY, JSON.stringify(w)); } catch {}
 }
 function resizeAt(i, start, dx) {
   // handle i sits between pane i and pane i+1; their sum stays constant
@@ -212,11 +301,6 @@ function resizeAt(i, start, dx) {
   w[i + 1] = total - w[i];
   return w;
 }
-
-try {
-  const saved = JSON.parse(localStorage.getItem(STORE) || "null");
-  if (Array.isArray(saved) && saved.length === 3 && saved.every((v) => v > 0)) applyWidths(saved);
-} catch {}
 
 panes.querySelectorAll(".handle").forEach((h) => {
   const i = Number(h.dataset.i);
@@ -250,13 +334,30 @@ panes.querySelectorAll(".handle").forEach((h) => {
     applyWidths(w);
     saveWidths(w);
   });
-  h.addEventListener("dblclick", () => { // reset to defaults
-    panes.style.removeProperty("--c1");
-    panes.style.removeProperty("--c2");
-    panes.style.removeProperty("--c3");
-    try { localStorage.removeItem(STORE); } catch {}
+  h.addEventListener("dblclick", () => {
+    ["--c1", "--c2", "--c3"].forEach((v) => panes.style.removeProperty(v));
+    try { localStorage.removeItem(PANES_KEY); } catch {}
   });
 });
+
+// ---------------------------------------------------------------------------
+// Startup: server defaults, then this browser's saved choices on top.
+// ---------------------------------------------------------------------------
+async function init() {
+  try {
+    const r = await fetch("/api/config");
+    if (r.ok) defaults = effective(FALLBACK, await r.json());
+  } catch {}
+  const prefs = effective(defaults, readSaved());
+  showTheme(prefs.theme);
+  showGen(prefs.gen);
+  try {
+    const saved = JSON.parse(localStorage.getItem(PANES_KEY) || "null");
+    if (Array.isArray(saved) && saved.length === 3 && saved.every((v) => v > 0)) applyWidths(saved);
+  } catch {}
+  paintXML();
+}
+init();
 
 const SAMPLE = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:pay="http://example.com/payments">
   <soapenv:Header/>
@@ -268,7 +369,7 @@ const SAMPLE = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap
       </pay:Account>
       <pay:Item seq="1">
         <pay:Amount>10.50</pay:Amount>
-        <pay:Memo>top-up</pay:Memo>
+        <pay:Memo>top-up &amp; fees</pay:Memo>
       </pay:Item>
       <pay:Item seq="2">
         <pay:Amount>3.00</pay:Amount>

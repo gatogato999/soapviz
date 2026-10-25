@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 
+	"soapviz/config"
 	"soapviz/soap"
 )
 
@@ -21,14 +22,15 @@ var assets embed.FS
 
 type Server struct {
 	tmpl *template.Template
+	cfg  config.Config
 }
 
-func New() (*Server, error) {
+func New(cfg config.Config) (*Server, error) {
 	t, err := template.ParseFS(assets, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
-	return &Server{tmpl: t}, nil
+	return &Server{tmpl: t, cfg: cfg}, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -36,15 +38,27 @@ func (s *Server) Handler() http.Handler {
 	static, _ := fs.Sub(assets, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static))))
 	mux.HandleFunc("GET /{$}", s.index)
+	mux.HandleFunc("GET /api/config", s.clientConfig)
 	mux.HandleFunc("POST /api/process", s.process)
 	return mux
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.ExecuteTemplate(w, "index.html", nil); err != nil {
+	data := struct{ Theme string }{s.cfg.Theme}
+	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// clientConfig sends the defaults a browser uses until its user saves their
+// own. The server keeps no per-user state; saved choices live in the browser.
+func (s *Server) clientConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, struct {
+		Theme string           `json:"theme"`
+		Gen   config.Generator `json:"gen"`
+	}{s.cfg.Theme, s.cfg.Gen})
 }
 
 type processReq struct {
@@ -81,7 +95,7 @@ type processResp struct {
 }
 
 func (s *Server) process(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 8<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, int64(s.cfg.MaxBodyMB)<<20)
 	var req processReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, processResp{Error: "bad request: " + err.Error()})
@@ -157,7 +171,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 type nodeView struct {
 	Path      string
-	Label     string
+	Label     string // prefix:local, for aria labels
+	Prefix    string
+	Local     string
 	NameSize  int
 	Root      bool
 	Leaf      bool
@@ -182,7 +198,9 @@ func buildView(n *soap.Node, path []int) nodeView {
 	v := nodeView{
 		Path:     soap.FormatPath(path),
 		Label:    label,
-		NameSize: clamp(len(label)+1, 3, 60),
+		Prefix:   n.Prefix,
+		Local:    n.Name,
+		NameSize: clamp(len(n.Name)+1, 3, 60),
 		Root:     len(path) == 0,
 		Leaf:     len(n.Children) == 0,
 		Text:     n.Text,

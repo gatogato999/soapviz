@@ -1,16 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{.Theme}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>soapviz</title>
+<script src="/static/boot.js"></script>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="bar">
   <h1>soapviz</h1>
   <span id="status" class="status" role="status" aria-live="polite"></span>
+  <div class="swatches" role="radiogroup" aria-label="Theme">
+    <button type="button" class="sw" role="radio" aria-checked="false" data-theme="light" title="Light" aria-label="Light theme"></button>
+    <button type="button" class="sw" role="radio" aria-checked="false" data-theme="dim" title="Dim" aria-label="Dim theme"></button>
+    <button type="button" class="sw" role="radio" aria-checked="false" data-theme="dark" title="Dark" aria-label="Dark theme"></button>
+  </div>
   <button type="button" id="sample" class="ghost">Load sample</button>
+  <button type="button" id="reset" class="ghost" title="Forget your saved theme, options and pane widths">Reset to defaults</button>
 </header>
 
 <main class="panes">

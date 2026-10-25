@@ -2,7 +2,7 @@
 <div class="node{{if .Leaf}} leaf{{end}}" data-path="{{.Path}}">
   <div class="row">
     {{if .Leaf}}<span class="tg"></span>{{else}}<button type="button" class="tg" data-act="toggle" aria-label="Collapse or expand {{.Label}}"></button>{{end}}
-    <input class="nm" data-k="name" value="{{.Label}}" size="{{.NameSize}}" aria-label="Element name" spellcheck="false">
+    <span class="qn">{{if .Prefix}}<span class="pfx">{{.Prefix}}:</span>{{end}}<input class="nm" data-k="name" data-prefix="{{.Prefix}}" value="{{.Local}}" size="{{.NameSize}}" aria-label="Element name" spellcheck="false"></span>
     {{range .NS}}<span class="ns" title="{{.URI}}">{{.Decl}}</span>{{end}}
     {{range .Attrs}}<label class="attr"><span class="an">{{.Name}}</span><input data-k="attr" data-i="{{.Index}}" value="{{.Value}}" size="{{.Size}}" spellcheck="false"></label>{{end}}
     {{if .Leaf}}
