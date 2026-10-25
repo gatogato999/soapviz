@@ -10,6 +10,10 @@ Local SOAP viewer/editor and Go struct generator. Stdlib only.
 Layout: `soap/` is the core (parse, render, edit, generate) with no HTTP.
 `web/` is a stateless JSON endpoint plus embedded templates and static files.
 
+UI
+- Pane widths: drag the handles, or focus one and use Left/Right (Shift = bigger steps). Double-click resets. Widths persist in localStorage.
+- XML is highlighted client-side (textarea over a highlighted copy); Go is highlighted server-side with go/scanner.
+
 Generator rules
 - Same-named siblings merge across all occurrences: repeated -> `[]T`, missing in some -> optional.
 - Leaf without attributes -> `string`. No type guessing (leading zeros, "true" etc. stay strings).

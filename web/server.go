@@ -75,7 +75,8 @@ type processResp struct {
 	Error     string `json:"error,omitempty"`     // parse or edit failure; other fields are unset
 	XML       string `json:"xml,omitempty"`       // normalized XML after any edit
 	Tree      string `json:"tree,omitempty"`      // rendered tree HTML
-	Code      string `json:"code,omitempty"`      // generated Go
+	Code      string `json:"code,omitempty"`      // generated Go, plain text (for copying)
+	CodeHTML  string `json:"codeHtml,omitempty"`  // same, with syntax-highlight spans
 	CodeError string `json:"codeError,omitempty"` // generator failure
 }
 
@@ -131,6 +132,7 @@ func (s *Server) handle(req processReq) processResp {
 		resp.CodeError = err.Error()
 	} else {
 		resp.Code = code
+		resp.CodeHTML = string(highlightGo(code))
 	}
 	return resp
 }
