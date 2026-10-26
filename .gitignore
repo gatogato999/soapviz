@@ -1,2 +1,5 @@
+dist/
+/soapviz
 soapviz
 config.ini
+.gitignore-bak

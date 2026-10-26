@@ -2,12 +2,14 @@ package web
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"soapviz/config"
+	"soapviz/engine"
 )
 
 func newTestServer(t *testing.T, cfg config.Config) *httptest.Server {
@@ -21,38 +23,33 @@ func newTestServer(t *testing.T, cfg config.Config) *httptest.Server {
 	return ts
 }
 
-func TestIndexUsesConfiguredTheme(t *testing.T) {
-	cfg := config.Default()
-	cfg.Theme = "dark"
-	ts := newTestServer(t, cfg)
-	res, err := http.Get(ts.URL + "/")
+func get(t *testing.T, url string) string {
+	t.Helper()
+	res, err := http.Get(url)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer res.Body.Close()
-	var b strings.Builder
-	buf := make([]byte, 4096)
-	for {
-		n, err := res.Body.Read(buf)
-		b.Write(buf[:n])
-		if err != nil {
-			break
-		}
+	b, _ := io.ReadAll(res.Body)
+	return string(b)
+}
+
+func TestIndexUsesConfiguredTheme(t *testing.T) {
+	cfg := config.Default()
+	cfg.Theme = "dark"
+	body := get(t, newTestServer(t, cfg).URL+"/")
+	if !strings.Contains(body, `data-theme="dark"`) {
+		t.Errorf("theme not rendered into page:\n%.200s", body)
 	}
-	if !strings.Contains(b.String(), `data-theme="dark"`) {
-		t.Errorf("theme not rendered into page:\n%s", b.String()[:200])
+	// Relative asset paths keep the page working under a sub-path (GitHub Pages).
+	if strings.Contains(body, `"/static/`) {
+		t.Errorf("index.html must use relative asset paths")
 	}
 }
 
 func TestClientConfig(t *testing.T) {
 	cfg := config.Default()
 	cfg.Gen.JSON, cfg.Gen.JSONCase, cfg.Gen.Package = true, "camel", "pay"
-	ts := newTestServer(t, cfg)
-	res, err := http.Get(ts.URL + "/api/config")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer res.Body.Close()
 	var got struct {
 		Theme string `json:"theme"`
 		Gen   struct {
@@ -61,11 +58,28 @@ func TestClientConfig(t *testing.T) {
 			Pkg      string `json:"pkg"`
 		} `json:"gen"`
 	}
-	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+	if err := json.Unmarshal([]byte(get(t, newTestServer(t, cfg).URL+"/api/config")), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Theme != "dim" || !got.Gen.JSON || got.Gen.JSONCase != "camel" || got.Gen.Pkg != "pay" {
 		t.Errorf("unexpected config: %+v", got)
+	}
+}
+
+func TestProcess(t *testing.T) {
+	ts := newTestServer(t, config.Default())
+	res, err := http.Post(ts.URL+"/api/process", "application/json",
+		strings.NewReader(`{"xml":"<a><b>1</b></a>","gen":{}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var r engine.Response
+	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+		t.Fatal(err)
+	}
+	if r.Tree == nil || r.Tree.Local != "a" || !strings.Contains(r.Code, "type A struct") {
+		t.Errorf("unexpected response: %+v", r)
 	}
 }
 

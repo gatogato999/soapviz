@@ -17,8 +17,26 @@ only supplies the defaults for people who have not changed anything. "Reset to
 defaults" in the header clears a browser's saved choices. There is no
 authentication, so bind to 0.0.0.0 only on a network you trust.
 
-Layout: `soap/` is the core (parse, render, edit, generate) with no HTTP.
-`web/` is a stateless JSON endpoint plus embedded templates and static files.
+Layout
+- `soap/`    core: parse, render, edit, generate. Standard library only.
+- `engine/`  one request/response function (`Process`) over the core, plus the Go highlighter. No HTTP, no templates.
+- `web/`     HTTP server, embedded UI files. Stateless.
+- `cmd/soapviz`  the server. `cmd/wasm`  the same engine compiled to WebAssembly.
+- `pages/`, `scripts/build-pages.sh`, `.github/workflows/pages.yml`  static build for GitHub Pages.
+
+The UI (`web/static`, `web/templates/index.html`) is shared. It calls `api/process`
+on the server, or `window.soapvizTransport` (WebAssembly) in the static build.
+
+GitHub Pages (free plan needs a public repository)
+1. Push to GitHub, default branch `main`.
+2. Settings > Pages > Source: **GitHub Actions**.
+3. Each push to `main` runs vet and tests, builds `dist/`, and deploys it.
+   The site is `https://<user>.github.io/<repo>/`. Everything runs in the visitor's
+   browser; nothing is uploaded. Build locally with `scripts/build-pages.sh /tmp/site`
+   and serve that folder with any static file server. `SOAPVIZ_THEME=dark` sets the
+   first-visit theme. `config.ini` does not apply to the static build.
+Do not commit real bank payloads or hostnames to a public repository. Add a LICENSE
+if you want others to be allowed to use the code.
 
 UI
 - Three themes (light, dim, dark) via the swatches in the header.

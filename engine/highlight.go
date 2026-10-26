@@ -1,9 +1,9 @@
-package web
+package engine
 
 import (
 	"go/scanner"
 	"go/token"
-	"html/template"
+	"html"
 	"strings"
 )
 
@@ -16,7 +16,7 @@ var predeclared = map[string]bool{
 
 // highlightGo wraps Go tokens in <span class="..."> using go/scanner. The text
 // is HTML-escaped; the original source is reproduced exactly between spans.
-func highlightGo(src string) template.HTML {
+func highlightGo(src string) string {
 	var s scanner.Scanner
 	file := token.NewFileSet().AddFile("", -1, len(src))
 	s.Init(file, []byte(src), func(token.Position, string) {}, scanner.ScanComments)
@@ -40,7 +40,7 @@ func highlightGo(src string) template.HTML {
 		if off < last || off+len(text) > len(src) {
 			continue
 		}
-		b.WriteString(template.HTMLEscapeString(src[last:off]))
+		b.WriteString(html.EscapeString(src[last:off]))
 
 		class := ""
 		switch {
@@ -57,7 +57,7 @@ func highlightGo(src string) template.HTML {
 		}
 		afterType = tok == token.TYPE
 
-		chunk := template.HTMLEscapeString(src[off : off+len(text)])
+		chunk := html.EscapeString(src[off : off+len(text)])
 		if class != "" {
 			b.WriteString(`<span class="` + class + `">` + chunk + `</span>`)
 		} else {
@@ -65,6 +65,6 @@ func highlightGo(src string) template.HTML {
 		}
 		last = off + len(text)
 	}
-	b.WriteString(template.HTMLEscapeString(src[last:]))
-	return template.HTML(b.String())
+	b.WriteString(html.EscapeString(src[last:]))
+	return b.String()
 }

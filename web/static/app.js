@@ -105,13 +105,20 @@ function run(edit, { renderTree = true } = {}) {
 const EMPTY_TREE = '<p class="empty">Paste XML to see it here. Edit values in place; changes flow back into the XML.</p>';
 const closed = new Set(); // paths of collapsed nodes, kept across re-renders
 
-async function send(edit, renderTree) {
-  const res = await fetch("/api/process", {
+// By default requests go to the Go server. The static (GitHub Pages) build
+// defines window.soapvizTransport, which runs the same engine as WebAssembly.
+async function httpTransport(req) {
+  const res = await fetch("api/process", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ xml: xmlEl.value, edit: edit || null, gen: genOpts() }),
+    body: JSON.stringify(req),
   });
-  const r = await res.json();
+  return res.json();
+}
+const transport = window.soapvizTransport || httpTransport;
+
+async function send(edit, renderTree) {
+  const r = await transport({ xml: xmlEl.value, edit: edit || null, gen: genOpts() });
 
   if (r.empty) {
     treeEl.innerHTML = EMPTY_TREE;
@@ -131,14 +138,98 @@ async function send(edit, renderTree) {
   setStatus("Valid XML");
   if (edit) setXML(r.xml);
   if (renderTree) {
-    treeEl.innerHTML = r.tree;
-    treeEl.querySelectorAll(".node").forEach((n) => {
-      if (closed.has(n.dataset.path)) n.classList.add("closed");
-    });
+    treeEl.replaceChildren(renderNode(r.tree));
   }
   lastCode = r.code || "";
   codeEl.innerHTML = r.codeHtml || ""; // escaped by the server
   codeErrEl.textContent = r.codeError || "";
+}
+
+// ---------------------------------------------------------------------------
+// Tree rendering. Built with DOM APIs (never innerHTML), so XML content can
+// not inject markup.
+// ---------------------------------------------------------------------------
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+
+function h(tag, cls, props) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (props) Object.assign(e, props);
+  return e;
+}
+
+function field(tag, cls, value, data, label) {
+  const e = h(tag, cls);
+  e.value = value;
+  e.spellcheck = false;
+  if (label) e.setAttribute("aria-label", label);
+  for (const [k, v] of Object.entries(data)) e.dataset[k] = v;
+  return e;
+}
+
+function renderNode(n) {
+  const label = n.prefix ? `${n.prefix}:${n.local}` : n.local;
+  const node = h("div", "node" + (n.leaf ? " leaf" : ""));
+  node.dataset.path = n.path;
+  if (closed.has(n.path)) node.classList.add("closed");
+
+  const row = h("div", "row");
+  if (n.leaf) {
+    row.append(h("span", "tg"));
+  } else {
+    const t = h("button", "tg", { type: "button" });
+    t.dataset.act = "toggle";
+    t.setAttribute("aria-label", `Collapse or expand ${label}`);
+    row.append(t);
+  }
+
+  const qn = h("span", "qn");
+  if (n.prefix) qn.append(h("span", "pfx", { textContent: n.prefix + ":" }));
+  const name = field("input", "nm", n.local, { k: "name", prefix: n.prefix || "" }, "Element name");
+  name.size = clamp(n.local.length + 1, 3, 60);
+  qn.append(name);
+  row.append(qn);
+
+  for (const ns of n.ns || []) row.append(h("span", "ns", { textContent: ns.decl, title: ns.uri }));
+
+  for (const a of n.attrs || []) {
+    const lab = h("label", "attr");
+    lab.append(h("span", "an", { textContent: a.name }));
+    const inp = field("input", "", a.value, { k: "attr", i: a.index });
+    inp.size = clamp(a.value.length + 1, 4, 40);
+    lab.append(inp);
+    row.append(lab);
+  }
+
+  const text = n.text || "";
+  const textLabel = `Text of ${label}`;
+  if (n.leaf && text.includes("\n")) {
+    const ta = field("textarea", "txt", text, { k: "text" }, textLabel);
+    ta.rows = Math.min(text.split("\n").length, 8);
+    row.append(ta);
+  } else if (n.leaf || text) {
+    const inp = field("input", "txt", text, { k: "text" }, textLabel);
+    if (n.leaf) inp.placeholder = "empty";
+    row.append(inp);
+  }
+
+  if (!n.root) {
+    const acts = h("span", "acts");
+    for (const [act, caption] of [["dup", "Duplicate"], ["delete", "Delete"]]) {
+      const b = h("button", "", { type: "button", textContent: caption });
+      b.dataset.act = act;
+      acts.append(b);
+    }
+    row.append(acts);
+  }
+  node.append(row);
+
+  if (n.children && n.children.length) {
+    const kids = h("div", "kids");
+    for (const c of n.children) kids.append(renderNode(c));
+    node.append(kids);
+  }
+  return node;
 }
 
 xmlEl.addEventListener("input", () => {
@@ -344,10 +435,12 @@ panes.querySelectorAll(".handle").forEach((h) => {
 // Startup: server defaults, then this browser's saved choices on top.
 // ---------------------------------------------------------------------------
 async function init() {
-  try {
-    const r = await fetch("/api/config");
-    if (r.ok) defaults = effective(FALLBACK, await r.json());
-  } catch {}
+  if (!window.soapvizTransport) { // the static build has no server to ask
+    try {
+      const r = await fetch("api/config");
+      if (r.ok) defaults = effective(FALLBACK, await r.json());
+    } catch {}
+  }
   const prefs = effective(defaults, readSaved());
   showTheme(prefs.theme);
   showGen(prefs.gen);
