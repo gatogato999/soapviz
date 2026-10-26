@@ -9,8 +9,8 @@ import (
 	"io/fs"
 	"net/http"
 
-	"soapviz/config"
-	"soapviz/engine"
+	"github.com/gatogato999/soapviz/config"
+	"github.com/gatogato999/soapviz/engine"
 )
 
 //go:embed templates/*.html static/*

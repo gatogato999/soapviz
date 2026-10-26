@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"soapviz/config"
-	"soapviz/engine"
+	"github.com/gatogato999/soapviz/config"
+	"github.com/gatogato999/soapviz/engine"
 )
 
 func newTestServer(t *testing.T, cfg config.Config) *httptest.Server {

@@ -1,3 +1,3 @@
-module soapviz
+module github.com/gatogato999/soapviz
 
-go 1.27.1
+go 1.22

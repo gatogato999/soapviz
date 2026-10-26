@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"soapviz/soap"
+	"github.com/gatogato999/soapviz/soap"
 )
 
 type Request struct {

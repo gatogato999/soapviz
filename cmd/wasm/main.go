@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"syscall/js"
 
-	"soapviz/engine"
+	"github.com/gatogato999/soapviz/engine"
 )
 
 func main() {
