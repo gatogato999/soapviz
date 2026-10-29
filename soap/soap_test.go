@@ -191,3 +191,35 @@ func TestGenerateLeafWithAttr(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateInline(t *testing.T) {
+	n := mustParse(t, `<R a="1"><Hdr><Name>x</Name></Hdr><Item s="1"><V>1</V></Item><Item s="2"><V>2</V><Opt><K>k</K></Opt></Item><Leaf unit="kg">5</Leaf></R>`)
+	raw, err := Generate(n, Options{Inline: true, JSON: true, JSONCase: CaseSnake})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(raw, "type "); got != 1 {
+		t.Errorf("want exactly one named type, got %d:\n%s", got, raw)
+	}
+	got := squash(raw)
+	for _, want := range []string{
+		"type R struct {",
+		"Hdr struct { Name string `xml:\"Name\" json:\"name\"` } `xml:\"Hdr\" json:\"hdr\"`",
+		"Item []struct {",
+		"Opt *struct { K string `xml:\"K\" json:\"k\"` } `xml:\"Opt,omitempty\" json:\"opt\"`",
+		"Leaf struct { Unit string `xml:\"unit,attr\" json:\"unit\"` Value string `xml:\",chardata\" json:\"value\"` } `xml:\"Leaf\" json:\"leaf\"`",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, raw)
+		}
+	}
+	// Same shapes in two places stay separate (no shared named type to reuse).
+	n2 := mustParse(t, `<R><A><Z>1</Z></A><B><Z>1</Z></B></R>`)
+	raw2, err := Generate(n2, Options{Inline: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(raw2, "Z string") != 2 || strings.Count(raw2, "type ") != 1 {
+		t.Errorf("inline output wrong:\n%s", raw2)
+	}
+}

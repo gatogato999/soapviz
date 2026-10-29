@@ -17,7 +17,7 @@ const THEMES = ["light", "dim", "dark"];
 const CASES = ["none", "snake", "camel"];
 const FALLBACK = {
   theme: "dim",
-  gen: { envelope: false, namespaces: false, json: false, jsonCase: "snake", omitEmpty: false, root: "", pkg: "" },
+  gen: { envelope: false, namespaces: false, json: false, jsonCase: "snake", omitEmpty: false, inline: false, root: "", pkg: "" },
 };
 let defaults = FALLBACK;
 
@@ -35,7 +35,7 @@ function effective(base, saved) {
   const out = { theme: base.theme, gen: { ...base.gen } };
   if (THEMES.includes(saved.theme)) out.theme = saved.theme;
   const g = saved.gen || {};
-  for (const k of ["envelope", "namespaces", "json", "omitEmpty"]) if (typeof g[k] === "boolean") out.gen[k] = g[k];
+  for (const k of ["envelope", "namespaces", "json", "omitEmpty", "inline"]) if (typeof g[k] === "boolean") out.gen[k] = g[k];
   if (CASES.includes(g.jsonCase)) out.gen.jsonCase = g.jsonCase;
   for (const k of ["root", "pkg"]) if (typeof g[k] === "string") out.gen[k] = g[k];
   return out;
@@ -58,6 +58,7 @@ function genOpts() {
     json: $("#o-json").checked,
     jsonCase: $("#o-case").value,
     omitEmpty: $("#o-omit").checked,
+    inline: $("#o-inline").checked,
     root: $("#o-root").value,
     pkg: $("#o-pkg").value,
   };
@@ -74,6 +75,7 @@ function showGen(g) {
   $("#o-json").checked = g.json;
   $("#o-case").value = g.jsonCase;
   $("#o-omit").checked = g.omitEmpty;
+  $("#o-inline").checked = g.inline;
   $("#o-root").value = g.root;
   $("#o-pkg").value = g.pkg;
   syncJSONControls();

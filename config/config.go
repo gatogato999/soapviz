@@ -27,6 +27,7 @@ type Generator struct {
 	JSON       bool   `json:"json"`
 	JSONCase   string `json:"jsonCase"` // none | snake | camel
 	OmitEmpty  bool   `json:"omitEmpty"`
+	Inline     bool   `json:"inline"`
 	Root       string `json:"root"`
 	Package    string `json:"pkg"`
 }
@@ -132,6 +133,8 @@ func (c *Config) set(section, key, val string) error {
 		c.Gen.JSONCase, err = oneOf(val, "none", "snake", "camel")
 	case "generator.omit_empty":
 		c.Gen.OmitEmpty, err = parseBool(val)
+	case "generator.inline":
+		c.Gen.Inline, err = parseBool(val)
 	case "generator.root":
 		c.Gen.Root = val
 	case "generator.package":

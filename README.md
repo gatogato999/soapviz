@@ -30,6 +30,7 @@ Reading a SOAP payload as one long line of XML is slow, and hand-writing the Go 
 - Editable tree and syntax-highlighted XML, kept in sync both ways
 - Go struct generation that merges every occurrence of an element, so repeated elements become slices and elements missing from some occurrences become optional
 - Strips `Envelope`/`Body` by default; one checkbox keeps them
+- Inline mode: one named root type with every nested element as an anonymous struct inside it, instead of a separate type per element
 - `json` tags: as written, snake_case or camelCase, with optional `omitempty`
 - Optional namespace URIs in `xml` tags, custom root type name, optional `package` clause
 - Light, dim and dark themes; draggable, keyboard-resizable panes
@@ -81,6 +82,29 @@ type Item struct {
 
 `Item` is a slice because it repeats, and `Memo` gets `omitempty` because only one of the two items has it.
 
+### Inline mode
+
+Turn on **Inline nested structs** (or `inline = true` in the config) to get one type with the nesting written out, which suits one-off decoding where you do not want a type per element:
+
+```go
+type GetStatementResponse struct {
+	XMLName       xml.Name `xml:"GetStatementResponse"`
+	Status        string   `xml:"status,attr"`
+	TransactionID string   `xml:"TransactionID"`
+	Account       struct {
+		Currency string `xml:"currency,attr"`
+		MSISDN   string `xml:"MSISDN"`
+	} `xml:"Account"`
+	Item []struct {
+		Seq    string `xml:"seq,attr"`
+		Amount string `xml:"Amount"`
+		Memo   string `xml:"Memo,omitempty"`
+	} `xml:"Item"`
+}
+```
+
+Nothing is shared between places in this mode, so the same shape that appears twice is written out twice.
+
 ## Themes
 
 <table>
@@ -117,7 +141,7 @@ Copy [`config-example.ini`](config-example.ini) to `config.ini` to change defaul
 |---|---|
 | `[server]` | `listen`, `open_browser`, `max_body_mb` |
 | `[ui]` | `theme` (`light`, `dim`, `dark`) |
-| `[generator]` | `include_envelope`, `namespaces`, `json`, `json_case`, `omit_empty`, `root`, `package` |
+| `[generator]` | `include_envelope`, `namespaces`, `json`, `json_case`, `omit_empty`, `inline`, `root`, `package` |
 
 The file is read from `-config`, else `./config.ini`, else next to the binary. The flags `-addr` and `-open` override it.
 
@@ -133,7 +157,7 @@ Set `listen = 0.0.0.0:8484`. The server keeps no per-user state: theme, options 
 | Element missing from some occurrences | `omitempty`; a pointer if it is a struct |
 | Element with no attributes or children | `string` (values are never guessed as numbers or booleans, so `0912345678` stays a string) |
 | Element with attributes and text | struct with a `Value` field tagged `,chardata` |
-| Same element name, different shape in two places | second one becomes `ParentName`, then numbered |
+| Same element name, different shape in two places | second one becomes `ParentName`, then numbered (not applicable in inline mode) |
 | Names like `transaction_id`, `TransactionID`, `MSISDN` | `TransactionID`, `TransactionID`, `MSISDN` |
 
 Namespaces go into `xml` tags only when you ask for them. Without them, unmarshaling matches on the local name.

@@ -30,6 +30,7 @@ type GenReq struct {
 	JSON       bool   `json:"json"`
 	JSONCase   string `json:"jsonCase"` // none | snake | camel
 	OmitEmpty  bool   `json:"omitEmpty"`
+	Inline     bool   `json:"inline"` // nested anonymous structs instead of named types
 	Root       string `json:"root"`
 	Package    string `json:"pkg"`
 }
@@ -108,6 +109,7 @@ func Process(req Request) (resp Response) {
 		JSON:       req.Gen.JSON,
 		JSONCase:   jsonCase(req.Gen.JSONCase),
 		OmitEmpty:  req.Gen.OmitEmpty,
+		Inline:     req.Gen.Inline,
 	})
 	if err != nil {
 		resp.CodeError = err.Error()

@@ -19,6 +19,7 @@ theme = Dark
 [generator]
 json = true
 json_case = camel
+inline = on
 package = "pay"
 root = Response # trailing
 `))
@@ -28,7 +29,7 @@ root = Response # trailing
 	if c.Listen != "0.0.0.0:9000" || !c.OpenBrowser || c.MaxBodyMB != 2 || c.Theme != "dark" {
 		t.Errorf("server/ui wrong: %+v", c)
 	}
-	if !c.Gen.JSON || c.Gen.JSONCase != "camel" || c.Gen.Package != "pay" || c.Gen.Root != "Response" {
+	if !c.Gen.JSON || !c.Gen.Inline || c.Gen.JSONCase != "camel" || c.Gen.Package != "pay" || c.Gen.Root != "Response" {
 		t.Errorf("generator wrong: %+v", c.Gen)
 	}
 }

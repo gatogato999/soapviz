@@ -23,6 +23,7 @@ type Options struct {
 	JSON       bool   // add json tags
 	JSONCase   Case
 	OmitEmpty  bool // json omitempty on optional and repeated fields
+	Inline     bool // nest anonymous structs inside the root type instead of emitting named types
 }
 
 // Generate builds Go struct source from a sample element. Elements with the
@@ -198,8 +199,12 @@ func (g *generator) resolve(s *shape, base, parent string, root bool) string {
 	if !root && len(s.fields) == 0 && len(s.attrs) == 0 {
 		return "string"
 	}
-	slot := &def{}
-	g.defs = append(g.defs, slot)
+	inline := g.opt.Inline && !root
+	var slot *def // inline structs have no top-level definition
+	if !inline {
+		slot = &def{}
+		g.defs = append(g.defs, slot)
+	}
 
 	f := &fieldSet{goUsed: map[string]bool{}, jsonUsed: map[string]bool{}}
 	var lines []string
@@ -251,6 +256,9 @@ func (g *generator) resolve(s *shape, base, parent string, root bool) string {
 	}
 
 	body := strings.Join(lines, "\n")
+	if inline {
+		return "struct {\n" + body + "\n}"
+	}
 	if root {
 		slot.name, slot.body = base, body
 		g.names[base] = body
