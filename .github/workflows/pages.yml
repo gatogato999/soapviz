@@ -27,6 +27,9 @@ jobs:
           go vet ./...
           GOOS=js GOARCH=wasm go vet ./cmd/wasm
           go test ./...
+      - name: Build server binary
+        # Fails if cmd/soapviz is missing from the checkout (e.g. ignored by .gitignore).
+        run: go build -o /dev/null ./cmd/soapviz
       - name: Build static site
         run: scripts/build-pages.sh dist
       - uses: actions/configure-pages@v5
