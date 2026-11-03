@@ -33,6 +33,8 @@ Reading a SOAP payload as one long line of XML is slow, and hand-writing the Go 
 - Inline mode: one named root type with every nested element as an anonymous struct inside it, instead of a separate type per element
 - `json` tags: as written, snake_case or camelCase, with optional `omitempty`
 - Optional namespace URIs in `xml` tags, custom root type name, optional `package` clause
+- Saved samples: name and tag the XML you use often and switch with Ctrl+K, without copy and paste
+- Team samples: a shared folder on the server that everyone using it can open (and, if you allow it, add to)
 - Light, dim and dark themes; draggable, keyboard-resizable panes
 - Your theme, options and pane widths are saved in your own browser
 - Runs three ways: in the browser (WebAssembly), as a local Go binary, or as a shared server for a team
@@ -114,6 +116,25 @@ Nothing is shared between places in this mode, so the same shape that appears tw
   </tr>
 </table>
 
+## Samples and tags
+
+Press **Ctrl+S** to save the XML in the editor under a name, **Ctrl+K** to open the switcher, and **Enter** to jump back to the sample you came from. Saving is always explicit, so editing a vendor's original in the tree never changes it until you press Save (use **Save as** for a variant). If you switch away with unsaved changes, you are asked first.
+
+| Where | Lives in | Who sees it |
+|---|---|---|
+| **My samples** | this browser (IndexedDB) | only you, on this browser and address |
+| **Team samples** | a folder on the server | everyone using that server |
+
+Tags are optional, 1 to 4 letters, and show as a colored chip. `Req` is yellow, `Res` blue, `Err` red and `Ok` green; any other tag gets a color derived from its letters, so it looks the same for everyone. Change or add colors under `[tags]` in `config.ini`.
+
+**Team samples** are plain `.xml` files, one per sample, with the tag in the file name: `GetStatement [Req].xml`. Drop files into `shared_dir` and they appear for everyone. They are read-only in the UI unless you set `shared_write = true`, which lets anyone who can reach the server publish, overwrite and delete team samples. There is no authentication, so enable that only on a network you trust; every write is logged with the sender's address. Without a server (the static site) there is no team library; share by exporting and importing a file.
+
+Things to know:
+- Samples in your browser are stored unencrypted in your browser profile. Treat real payloads accordingly, and use **Delete all mine** on a shared machine.
+- Browser storage is per address. A different port, hostname or the static site has its own list, so use **Export all mine** to move or back up samples. Browsers can also evict storage under pressure, so export anything you cannot recreate.
+- **Reset to defaults** never deletes samples.
+- Each sample can be up to 8 MB.
+
 ## Run it locally
 
 With Go 1.22 or newer:
@@ -142,12 +163,14 @@ Copy [`config-example.ini`](config-example.ini) to `config.ini` to change defaul
 | `[server]` | `listen`, `open_browser`, `max_body_mb` |
 | `[ui]` | `theme` (`light`, `dim`, `dark`) |
 | `[generator]` | `include_envelope`, `namespaces`, `json`, `json_case`, `omit_empty`, `inline`, `root`, `package` |
+| `[samples]` | `shared_dir`, `shared_write` |
+| `[tags]` | any tag of 1 to 4 letters, set to a color: `req = yellow` |
 
 The file is read from `-config`, else `./config.ini`, else next to the binary. The flags `-addr` and `-open` override it.
 
 ### Sharing one instance with a team
 
-Set `listen = 0.0.0.0:8484`. The server keeps no per-user state: theme, options and pane widths live in each developer's own browser, and `config.ini` only provides the starting defaults. **There is no authentication**, so only expose it on a network you trust.
+Set `listen = 0.0.0.0:8484`. The server keeps no per-user state: theme, options, pane widths and My samples live in each developer's own browser, and `config.ini` only provides the starting defaults. Point `shared_dir` at a folder to give the team a common set of samples. **There is no authentication**, so only expose it on a network you trust.
 
 ## Generator rules
 
@@ -180,6 +203,7 @@ flowchart LR
 | `cmd/soapviz` | The server. |
 | `cmd/wasm` | The same engine compiled to WebAssembly for the static site. |
 | `config/` | `config.ini` parser. |
+| `shared/` | The team sample folder: file naming, validation, atomic writes. |
 
 The UI is the same code in both modes. It calls `api/process` on the server, or the WebAssembly module on the static site. Build the static site yourself with `scripts/build-pages.sh`; pushes to `main` deploy it through [GitHub Actions](.github/workflows/pages.yml).
 
@@ -189,6 +213,7 @@ The UI is the same code in both modes. It calls `api/process` on the server, or 
 - Whitespace around text is trimmed.
 - Types are not inferred. Everything is a `string`.
 - A single sample cannot show that a field is optional. Paste several items or responses for better results.
+- The team library has no authentication or per-user ownership. If `shared_write` is on, anyone who can reach the server can change it.
 
 ## Development
 

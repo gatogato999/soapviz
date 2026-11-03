@@ -279,10 +279,28 @@ document.querySelectorAll(".sw").forEach((b) =>
   })
 );
 
+// navigator.clipboard needs a secure context, and a team server on plain http
+// over the LAN is not one, so fall back to a hidden textarea and execCommand.
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.cssText = "position:fixed;left:-9999px;top:0";
+  document.body.append(ta);
+  ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  if (!ok) throw new Error("copy failed");
+}
+
 $("#copy").addEventListener("click", async () => {
   const btn = $("#copy");
   try {
-    await navigator.clipboard.writeText(lastCode);
+    await copyText(lastCode);
     btn.textContent = "Copied";
   } catch {
     btn.textContent = "Copy failed";
@@ -290,7 +308,9 @@ $("#copy").addEventListener("click", async () => {
   setTimeout(() => (btn.textContent = "Copy"), 1200);
 });
 
-$("#sample").addEventListener("click", () => {
+$("#sample").addEventListener("click", async () => {
+  if (!(await window.soapvizSamples.guardReplace())) return; // don't silently overwrite unsaved work
+  window.soapvizSamples.detach();
   closed.clear();
   setXML(SAMPLE);
   run(null);
@@ -368,6 +388,7 @@ function syncScroll() {
 function setXML(v) {
   xmlEl.value = v;
   paintXML();
+  document.dispatchEvent(new Event("soapviz:xml")); // lets the samples UI refresh its unsaved marker
 }
 xmlEl.addEventListener("scroll", syncScroll);
 
@@ -437,10 +458,14 @@ panes.querySelectorAll(".handle").forEach((h) => {
 // Startup: server defaults, then this browser's saved choices on top.
 // ---------------------------------------------------------------------------
 async function init() {
-  if (!window.soapvizTransport) { // the static build has no server to ask
+  let serverCfg = {}; // the static build has no server, so no team samples and only built-in tag colors
+  if (!window.soapvizTransport) {
     try {
       const r = await fetch("api/config");
-      if (r.ok) defaults = effective(FALLBACK, await r.json());
+      if (r.ok) {
+        serverCfg = await r.json();
+        defaults = effective(FALLBACK, serverCfg);
+      }
     } catch {}
   }
   const prefs = effective(defaults, readSaved());
@@ -451,6 +476,7 @@ async function init() {
     if (Array.isArray(saved) && saved.length === 3 && saved.every((v) => v > 0)) applyWidths(saved);
   } catch {}
   paintXML();
+  window.soapvizSamples.init(serverCfg); // restores the last open sample into an empty editor
 }
 init();
 

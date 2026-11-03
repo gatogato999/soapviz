@@ -11,6 +11,8 @@
   --ent: #00695c;     /* entity */
   --ns: #6f5900;      /* xmlns declaration (tree) */
   --kw: #6a2f8f; --str: #1f6b2a; --num: #8f4d00;
+  --c-yellow: #614700; --c-blue: #0a4f9a; --c-green: #1a5c26; --c-red: #8c1b14;
+  --c-purple: #6a2f8f; --c-orange: #823d00; --c-teal: #005a4f; --c-gray: #394450;
   color-scheme: light;
 }
 [data-theme="light"] {
@@ -19,6 +21,8 @@
   --focus: #1f6fd1;   --sel: rgba(31, 111, 209, .25); --err: #b3261e;
   --tag: #0b5cad; --pfx: #7b3fa0; --attr: #a35a00; --av: #2e7d32; --txt: #a0303f; --ent: #00796b; --ns: #8a6d00;
   --kw: #7b3fa0; --str: #2e7d32; --num: #a35a00;
+  --c-yellow: #6f5200; --c-blue: #0b5cad; --c-green: #1e6b2c; --c-red: #b3261e;
+  --c-purple: #7b3fa0; --c-orange: #9a4700; --c-teal: #00695c; --c-gray: #4a5663;
   color-scheme: light;
 }
 [data-theme="dark"] {
@@ -27,6 +31,8 @@
   --focus: #5aa2ff;   --sel: rgba(90, 162, 255, .3); --err: #ff8a80;
   --tag: #6cb6ff; --pfx: #c792ea; --attr: #ffb454; --av: #8fd18f; --txt: #ff9aa8; --ent: #5fd3c4; --ns: #d9c46a;
   --kw: #c792ea; --str: #8fd18f; --num: #ffb454;
+  --c-yellow: #f0c64a; --c-blue: #6cb6ff; --c-green: #8fd18f; --c-red: #ff8a80;
+  --c-purple: #c792ea; --c-orange: #ffb454; --c-teal: #5fd3c4; --c-gray: #aab6c3;
   color-scheme: dark;
 }
 :root { --mono: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", Menlo, monospace; }
@@ -49,6 +55,10 @@ button, select, input[type="text"] { font: inherit; }
 button { cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 4px; padding: 3px 10px; }
 button:hover { border-color: var(--muted); }
 button.ghost { background: transparent; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--focus); border-color: var(--focus); color: #fff; }
+button.primary:hover { filter: brightness(1.08); }
+button.danger-hover:hover:not(:disabled) { color: var(--err); border-color: var(--err); }
 
 .swatches { display: flex; gap: 8px; }
 .sw { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 1px solid var(--muted); }
@@ -68,7 +78,16 @@ button.ghost { background: transparent; }
 body.dragging { cursor: col-resize; user-select: none; }
 
 .pane { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
-.pane > h2 { margin: 0; padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--line); }
+.pane > h2, .panehead { min-height: 40px; border-bottom: 1px solid var(--line); }
+.pane > h2 { margin: 0; padding: 0 12px; display: flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--muted); }
+.panehead { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; padding: 4px 12px; }
+.panehead h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+.head-actions { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.head-actions button { font-size: 12px; padding: 2px 8px; }
+.active-sample { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 90px; min-width: 0; font-size: 13px; }
+.active-sample .aname { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.active-sample .awhere { color: var(--muted); font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.active-sample .adirty { color: var(--attr); font-size: 12px; }
 
 /* XML editor: a transparent textarea over a highlighted copy of its text.
    Both must share identical font, padding and wrapping. */
@@ -148,3 +167,62 @@ textarea.txt { resize: vertical; }
   .handle { display: none; }
   .pane { min-height: 320px; }
 }
+
+/* tag chips: a colored pill; the letters themselves carry the meaning, color is a bonus */
+.chip { display: inline-block; flex: none; min-width: 2.4em; padding: 0 7px; border-radius: 999px; text-align: center;
+  font: 600 11px/18px var(--mono); letter-spacing: .02em; color: var(--c, var(--muted));
+  background: color-mix(in srgb, var(--c, var(--muted)) 20%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--c, var(--muted)) 45%, transparent); }
+.chip[data-c="yellow"] { --c: var(--c-yellow); }
+.chip[data-c="blue"]   { --c: var(--c-blue); }
+.chip[data-c="green"]  { --c: var(--c-green); }
+.chip[data-c="red"]    { --c: var(--c-red); }
+.chip[data-c="purple"] { --c: var(--c-purple); }
+.chip[data-c="orange"] { --c: var(--c-orange); }
+.chip[data-c="teal"]   { --c: var(--c-teal); }
+.chip[data-c="gray"]   { --c: var(--c-gray); }
+.chip-gap { display: inline-block; flex: none; width: 2.4em; }
+
+/* dialogs */
+dialog.modal { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 16px 18px; max-width: 94vw; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+dialog.modal::backdrop { background: rgba(10, 15, 20, .5); }
+dialog.modal h3 { margin: 0 0 10px; font-size: 15px; }
+dialog.modal p { margin: 6px 0; }
+dialog.modal .note { color: var(--muted); font-size: 13px; }
+dialog.modal .err { min-height: 1.2em; }
+dialog.modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+dialog.modal .field { display: grid; gap: 4px; margin: 10px 0; }
+dialog.modal .field small, dialog.modal fieldset small { color: var(--muted); font-weight: 400; }
+dialog.modal input[type="text"], dialog.modal input[type="search"] { font: inherit; color: inherit; background: var(--field); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; }
+dialog.modal #save-name { width: min(420px, 80vw); }
+dialog.modal fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 10px 0 0; padding: 6px 10px 8px; display: grid; gap: 4px; }
+dialog.modal fieldset[hidden] { display: none; }
+.tagrow { display: flex; align-items: center; gap: 10px; }
+
+dialog.panel[open] { display: flex; flex-direction: column; width: min(780px, 94vw); max-height: 80vh; padding: 0; margin-top: 8vh; }
+.sw-head { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); }
+.sw-head input { flex: 1; }
+.sw-body { flex: 1; overflow: auto; min-height: 120px; }
+#sw-list { list-style: none; margin: 0; padding: 4px 0; }
+.sw-group { padding: 10px 14px 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.sw-note { padding: 4px 14px 8px; color: var(--muted); font-size: 13px; }
+.sw-note.warn { color: var(--err); }
+.srow { position: relative; display: flex; align-items: center; gap: 8px; padding-right: 10px; }
+.sopen { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px 14px; cursor: pointer; border-radius: 4px; }
+.srow { border-radius: 4px; }
+.srow:hover, .srow.hl { background: var(--hover); }
+.srow.hl { box-shadow: inset 3px 0 0 var(--focus); }
+.sname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sopenmark { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.smeta { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+/* actions sit on top of the size/time column while the row is hovered or focused */
+.sacts { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: none; gap: 4px; padding: 2px 0 2px 12px; background: var(--hover); }
+.srow:hover .sacts, .srow:focus-within .sacts { display: flex; }
+.sacts button { font-size: 12px; padding: 1px 7px; }
+.sw-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+.sw-foot .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 100; max-width: min(640px, 92vw);
+  background: var(--ink); color: var(--surface); padding: 8px 16px; border-radius: 6px; font-size: 13px; box-shadow: 0 6px 24px rgba(0, 0, 0, .3); }
+.toast.bad { background: var(--err); color: #fff; }
+.toast[hidden] { display: none; }

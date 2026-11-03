@@ -8,9 +8,12 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+var tagKeyRE = regexp.MustCompile(`^[a-z]{1,4}$`)
 
 type Config struct {
 	Listen      string
@@ -18,6 +21,9 @@ type Config struct {
 	MaxBodyMB   int
 	Theme       string // light | dim | dark
 	Gen         Generator
+	SharedDir   string            // team sample folder; "" disables team samples
+	SharedWrite bool              // let the UI publish to and delete from SharedDir
+	TagColors   map[string]string // lowercase tag -> palette color
 }
 
 // Generator holds the default state of the Go output options.
@@ -34,12 +40,16 @@ type Generator struct {
 
 var Themes = []string{"light", "dim", "dark"}
 
+// TagPalette lists the colors a sample tag can use. The browser renders them.
+var TagPalette = []string{"yellow", "blue", "green", "red", "purple", "orange", "teal", "gray"}
+
 func Default() Config {
 	return Config{
 		Listen:    "127.0.0.1:8484",
 		MaxBodyMB: 8,
 		Theme:     "dim",
 		Gen:       Generator{JSONCase: "snake"},
+		TagColors: map[string]string{"req": "yellow", "res": "blue", "err": "red", "ok": "green"},
 	}
 }
 
@@ -108,6 +118,16 @@ func unquote(s string) string {
 
 func (c *Config) set(section, key, val string) error {
 	var err error
+	if section == "tags" { // [tags] takes any short tag as a key: req = yellow
+		if !tagKeyRE.MatchString(key) {
+			return fmt.Errorf("tags.%s: a tag is 1 to 4 letters", key)
+		}
+		c.TagColors[key], err = oneOf(val, TagPalette...)
+		if err != nil {
+			return fmt.Errorf("tags.%s: %w", key, err)
+		}
+		return nil
+	}
 	switch section + "." + key {
 	case "server.listen":
 		if val == "" {
@@ -133,6 +153,10 @@ func (c *Config) set(section, key, val string) error {
 		c.Gen.JSONCase, err = oneOf(val, "none", "snake", "camel")
 	case "generator.omit_empty":
 		c.Gen.OmitEmpty, err = parseBool(val)
+	case "samples.shared_dir":
+		c.SharedDir = val
+	case "samples.shared_write":
+		c.SharedWrite, err = parseBool(val)
 	case "generator.inline":
 		c.Gen.Inline, err = parseBool(val)
 	case "generator.root":

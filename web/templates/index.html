@@ -22,7 +22,15 @@
 
 <main class="panes">
   <section class="pane" aria-labelledby="h-xml">
-    <h2 id="h-xml">XML</h2>
+    <div class="panehead">
+      <h2 id="h-xml">XML</h2>
+      <span id="active-sample" class="active-sample" aria-live="polite"></span>
+      <div class="head-actions">
+        <button type="button" id="samples-btn" aria-haspopup="dialog" title="Open or manage samples (Ctrl+K)">Samples</button>
+        <button type="button" id="save-btn" title="Save (Ctrl+S)">Save</button>
+        <button type="button" id="saveas-btn" title="Save as a new sample">Save as…</button>
+      </div>
+    </div>
     <div class="editor">
       <pre id="hl" aria-hidden="true"></pre>
       <textarea id="xml" spellcheck="false" placeholder="Paste a SOAP request or response here"></textarea>
@@ -61,6 +69,73 @@
     <pre id="code" class="code"></pre>
   </section>
 </main>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<dialog id="dlg-switch" class="modal panel" aria-label="Samples">
+  <div class="sw-head">
+    <input id="sw-filter" type="search" role="combobox" aria-expanded="true" aria-controls="sw-list" aria-autocomplete="list"
+           placeholder="Filter by name or tag" aria-label="Filter samples" autocomplete="off" spellcheck="false">
+    <button type="button" id="sw-close">Close</button>
+  </div>
+  <div class="sw-body"><ul id="sw-list" role="listbox" aria-label="Samples"></ul></div>
+  <div class="sw-foot">
+    <button type="button" id="sw-import">Import…</button>
+    <button type="button" id="sw-export">Export all mine</button>
+    <button type="button" id="sw-clear" class="danger-hover">Delete all mine</button>
+    <span class="hint">Ctrl+K to open, Enter to switch back to the last sample</span>
+  </div>
+  <input type="file" id="sw-file" accept=".xml,.json,text/xml,application/xml,application/json" multiple hidden>
+</dialog>
+
+<dialog id="dlg-save" class="modal" aria-labelledby="dlg-save-title">
+  <form method="dialog" id="save-form">
+    <h3 id="dlg-save-title">Save sample</h3>
+    <label class="field">Name
+      <input id="save-name" type="text" maxlength="80" autocomplete="off" spellcheck="false" required>
+    </label>
+    <label class="field">Tag <small>optional, 1 to 4 letters</small>
+      <span class="tagrow"><input id="save-tag" type="text" maxlength="4" size="6" autocomplete="off" spellcheck="false" placeholder="Req"><span id="save-chip"></span></span>
+    </label>
+    <fieldset id="save-where" hidden>
+      <legend>Save to</legend>
+      <label><input type="radio" name="where" value="local" checked> My samples <small>this browser only</small></label>
+      <label><input type="radio" name="where" id="save-where-team" value="shared"> Team samples <small>everyone using this server</small></label>
+    </fieldset>
+    <p id="save-note" class="note"></p>
+    <p id="save-error" class="err" role="alert"></p>
+    <div class="actions">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="ok" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-unsaved" class="modal" aria-labelledby="dlg-unsaved-title">
+  <form method="dialog">
+    <h3 id="dlg-unsaved-title">Unsaved changes</h3>
+    <p id="dlg-unsaved-body"></p>
+    <div class="actions">
+      <button value="cancel">Cancel</button>
+      <button value="discard" class="danger-hover">Discard</button>
+      <button value="save" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-confirm" class="modal" aria-labelledby="dlg-confirm-title">
+  <form method="dialog">
+    <h3 id="dlg-confirm-title"></h3>
+    <p id="dlg-confirm-body"></p>
+    <div class="actions">
+      <button value="cancel">Cancel</button>
+      <button value="ok" id="dlg-confirm-ok" class="primary">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="static/tags.js"></script>
+<script src="static/samples-store.js"></script>
+<script src="static/samples.js"></script>
 <script src="static/app.js"></script>
 </body>
 </html>

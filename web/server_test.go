@@ -5,6 +5,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -95,5 +98,182 @@ func TestProcessBodyLimit(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", res.StatusCode)
+	}
+}
+
+// --- team samples ---
+
+func do(t *testing.T, method, url, body string) (int, map[string]any) {
+	t.Helper()
+	req, err := http.NewRequest(method, url, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var m map[string]any
+	_ = json.NewDecoder(res.Body).Decode(&m)
+	return res.StatusCode, m
+}
+
+func sharedServer(t *testing.T, write bool) (*httptest.Server, string) {
+	t.Helper()
+	cfg := config.Default()
+	cfg.SharedDir = t.TempDir()
+	cfg.SharedWrite = write
+	return newTestServer(t, cfg), cfg.SharedDir
+}
+
+func TestSharedDisabled(t *testing.T) {
+	ts := newTestServer(t, config.Default())
+	for _, c := range []struct{ method, path string }{
+		{"GET", "/api/shared"}, {"GET", "/api/shared/sample?name=x"},
+		{"PUT", "/api/shared/sample?name=x"}, {"DELETE", "/api/shared/sample?name=x"},
+	} {
+		if code, _ := do(t, c.method, ts.URL+c.path, `{"xml":"<a/>"}`); code != http.StatusNotFound {
+			t.Errorf("%s %s = %d, want 404", c.method, c.path, code)
+		}
+	}
+	var cfg struct {
+		Shared struct{ Enabled, Writable bool } `json:"shared"`
+		Tags   map[string]string                `json:"tags"`
+	}
+	if err := json.Unmarshal([]byte(get(t, ts.URL+"/api/config")), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Shared.Enabled || cfg.Shared.Writable || cfg.Tags["req"] != "yellow" || cfg.Tags["res"] != "blue" {
+		t.Errorf("config: %+v", cfg)
+	}
+}
+
+func TestSharedReadOnly(t *testing.T) {
+	ts, dir := sharedServer(t, false)
+	if err := os.WriteFile(filepath.Join(dir, "GetStatement [Req].xml"), []byte("<a>1</a>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, m := do(t, "GET", ts.URL+"/api/shared", "")
+	list, _ := m["samples"].([]any)
+	if code != 200 || len(list) != 1 || list[0].(map[string]any)["tag"] != "Req" {
+		t.Fatalf("list: %d %v", code, m)
+	}
+	code, m = do(t, "GET", ts.URL+"/api/shared/sample?name=getstatement", "")
+	if code != 200 || m["xml"] != "<a>1</a>" || m["tag"] != "Req" {
+		t.Fatalf("get: %d %v", code, m)
+	}
+	if code, _ := do(t, "PUT", ts.URL+"/api/shared/sample?name=New", `{"xml":"<a/>"}`); code != http.StatusForbidden {
+		t.Errorf("PUT on read-only = %d, want 403", code)
+	}
+	if code, _ := do(t, "DELETE", ts.URL+"/api/shared/sample?name=GetStatement", ""); code != http.StatusForbidden {
+		t.Errorf("DELETE on read-only = %d, want 403", code)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "GetStatement [Req].xml")); err != nil {
+		t.Errorf("file must survive: %v", err)
+	}
+	if code, _ := do(t, "GET", ts.URL+"/api/shared/sample?name=missing", ""); code != http.StatusNotFound {
+		t.Errorf("missing = %d", code)
+	}
+	var cfg struct {
+		Shared struct{ Enabled, Writable bool }
+	}
+	json.Unmarshal([]byte(get(t, ts.URL+"/api/config")), &cfg)
+	if !cfg.Shared.Enabled || cfg.Shared.Writable {
+		t.Errorf("config should say enabled, read-only: %+v", cfg)
+	}
+}
+
+func TestSharedWriteFlow(t *testing.T) {
+	ts, dir := sharedServer(t, true)
+	u := ts.URL + "/api/shared/sample?name=Req%20One"
+
+	code, m := do(t, "PUT", u, `{"tag":"Req","xml":"<a>1</a>"}`)
+	if code != 200 || m["tag"] != "Req" {
+		t.Fatalf("create: %d %v", code, m)
+	}
+	v1 := int64(m["updatedAt"].(float64))
+	if _, err := os.Stat(filepath.Join(dir, "Req One [Req].xml")); err != nil {
+		t.Fatalf("file not written: %v", err)
+	}
+
+	code, m = do(t, "PUT", u, `{"tag":"Req","xml":"<a>2</a>"}`)
+	if code != 409 || m["code"] != "exists" {
+		t.Errorf("duplicate create: %d %v", code, m)
+	}
+	code, m = do(t, "PUT", u, `{"tag":"Req","xml":"<a>2</a>","ifUpdatedAt":1}`)
+	if code != 409 || m["code"] != "conflict" || int64(m["updatedAt"].(float64)) != v1 {
+		t.Errorf("stale write: %d %v", code, m)
+	}
+	code, _ = do(t, "PUT", u, `{"tag":"Res","xml":"<a>2</a>","ifUpdatedAt":`+strconv.FormatInt(v1, 10)+`}`)
+	if code != 200 {
+		t.Errorf("good overwrite: %d", code)
+	}
+	if code, m := do(t, "GET", u, ""); code != 200 || m["xml"] != "<a>2</a>" || m["tag"] != "Res" {
+		t.Errorf("after overwrite: %d %v", code, m)
+	}
+	if code, _ := do(t, "DELETE", u, ""); code != http.StatusNoContent {
+		t.Errorf("delete: %d", code)
+	}
+	if des, _ := os.ReadDir(dir); len(des) != 0 {
+		t.Errorf("dir should be empty: %v", des)
+	}
+}
+
+func TestSharedRejectsBadInput(t *testing.T) {
+	ts, dir := sharedServer(t, true)
+	for _, name := range []string{"../escape", "a%2Fb", "..", ".hidden", "a%5Cb", "x%00y", "", "has[brackets]", "sp%20"} {
+		code, m := do(t, "PUT", ts.URL+"/api/shared/sample?name="+name, `{"xml":"<a/>"}`)
+		if code != http.StatusBadRequest {
+			t.Errorf("name %q: %d %v, want 400", name, code, m)
+		}
+	}
+	if code, _ := do(t, "PUT", ts.URL+"/api/shared/sample?name=ok", `{"tag":"toolong","xml":"<a/>"}`); code != 400 {
+		t.Errorf("bad tag: %d", code)
+	}
+	if code, _ := do(t, "PUT", ts.URL+"/api/shared/sample?name=ok", `{"xml":"   "}`); code != 400 {
+		t.Errorf("empty xml: %d", code)
+	}
+	if code, _ := do(t, "PUT", ts.URL+"/api/shared/sample?name=ok", `not json`); code != 400 {
+		t.Errorf("bad json: %d", code)
+	}
+	if des, _ := os.ReadDir(dir); len(des) != 0 {
+		t.Errorf("rejected requests left files: %v", des)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(dir), "escape.xml")); !os.IsNotExist(err) {
+		t.Error("path traversal escaped the folder")
+	}
+}
+
+// A web page on another site cannot write team samples: PUT and DELETE need a
+// CORS preflight, and this server answers it without granting anything.
+func TestSharedNoCORSGrant(t *testing.T) {
+	ts, _ := sharedServer(t, true)
+	req, _ := http.NewRequest("OPTIONS", ts.URL+"/api/shared/sample?name=x", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("Access-Control-Request-Method", "PUT")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if h := res.Header.Get("Access-Control-Allow-Origin"); h != "" {
+		t.Errorf("server must not grant cross-origin access, got %q", h)
+	}
+	if res.StatusCode < 400 {
+		t.Errorf("preflight should be refused, got %d", res.StatusCode)
+	}
+}
+
+func TestOpenSharedDirErrors(t *testing.T) {
+	cfg := config.Default()
+	cfg.SharedDir = filepath.Join(t.TempDir(), "missing")
+	if _, err := New(cfg); err == nil {
+		t.Error("read-only server must refuse a missing shared_dir")
+	}
+	cfg.SharedWrite = true
+	if _, err := New(cfg); err != nil {
+		t.Errorf("writable server should create it: %v", err)
 	}
 }
