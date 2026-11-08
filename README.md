@@ -33,7 +33,7 @@ Reading a SOAP payload as one long line of XML is slow, and hand-writing the Go 
 - Inline mode: one named root type with every nested element as an anonymous struct inside it, instead of a separate type per element
 - `json` tags: as written, snake_case or camelCase, with optional `omitempty`
 - Optional namespace URIs in `xml` tags, custom root type name, optional `package` clause
-- Saved samples: name and tag the XML you use often and switch with Ctrl+K, without copy and paste
+- Saved samples: name, tag and group the XML you use often in folders, and switch with Ctrl+K without copy and paste
 - Team samples: a shared folder on the server that everyone using it can open (and, if you allow it, add to)
 - Light, dim and dark themes; draggable, keyboard-resizable panes
 - Your theme, options and pane widths are saved in your own browser
@@ -116,24 +116,41 @@ Nothing is shared between places in this mode, so the same shape that appears tw
   </tr>
 </table>
 
-## Samples and tags
+## Samples, folders and tags
 
-Press **Ctrl+S** to save the XML in the editor under a name, **Ctrl+K** to open the switcher, and **Enter** to jump back to the sample you came from. Saving is always explicit, so editing a vendor's original in the tree never changes it until you press Save (use **Save as** for a variant). If you switch away with unsaved changes, you are asked first.
+The **Samples** button above the editor is a toggle menu, and it shows the sample you have open (`Req GetStatement ●` means unsaved changes). Click it, or press **Ctrl+K**, to open the menu; click outside, press Esc, or click again to close it. Press **Ctrl+S** to save, and **Enter** right after Ctrl+K to jump back to the sample you came from.
+
+Saving is always explicit, so editing a vendor's original in the tree never changes it until you press Save (use **Save as** for a variant). Switching away with unsaved changes asks first.
 
 | Where | Lives in | Who sees it |
 |---|---|---|
 | **My samples** | this browser (IndexedDB) | only you, on this browser and address |
 | **Team samples** | a folder on the server | everyone using that server |
 
-Tags are optional, 1 to 4 letters, and show as a colored chip. `Req` is yellow, `Res` blue, `Err` red and `Ok` green; any other tag gets a color derived from its letters, so it looks the same for everyone. Change or add colors under `[tags]` in `config.ini`.
+**Folders** group related samples. Type a folder name in the Save dialog (or use **New folder** in the menu) and pick it again later from the suggestions; **Edit** on a sample moves it between folders. Folders are one level deep. Click a folder to collapse it; the menu remembers. Deleting one of *your* folders never deletes its samples: they move to the top level (renamed `Name (2)` if that name is taken there). A team folder can only be deleted when it is empty.
 
-**Team samples** are plain `.xml` files, one per sample, with the tag in the file name: `GetStatement [Req].xml`. Drop files into `shared_dir` and they appear for everyone. They are read-only in the UI unless you set `shared_write = true`, which lets anyone who can reach the server publish, overwrite and delete team samples. There is no authentication, so enable that only on a network you trust; every write is logged with the sender's address. Without a server (the static site) there is no team library; share by exporting and importing a file.
+**Filtering.** Words match sample and folder *names*. To filter by tag, type `#res` (exact tag, any case) or click a tag chip, which puts `#res` in the box. `#res #req` shows either. So `resp` finds every sample with "resp" in its name, while `#resp` finds only the ones tagged `Resp`.
+
+**Tags** are optional, 1 to 4 letters, and show as a colored chip. `Req` is yellow, `Res` blue, `Err` red and `Ok` green; any other tag gets a color derived from its letters, so it looks the same for everyone. Change or add colors under `[tags]` in `config.ini`.
+
+**Team samples** are plain `.xml` files, one per sample, with the tag in the file name, optionally inside one level of subfolders:
+
+```
+shared_dir/
+  Timeout [Err].xml
+  BankX/
+    GetStatement [Req].xml
+    GetStatement [Res].xml
+```
+
+Drop files or folders in and they appear for everyone; an admin can reorganize them with ordinary file tools. The UI is read-only unless you set `shared_write = true`, which lets anyone who can reach the server publish, edit, move and delete team samples and create, rename and delete empty team folders. There is no authentication, so enable that only on a network you trust; every write is logged with the sender's address. Without a server (the static site) there is no team library; share by exporting and importing a file.
 
 Things to know:
 - Samples in your browser are stored unencrypted in your browser profile. Treat real payloads accordingly, and use **Delete all mine** on a shared machine.
-- Browser storage is per address. A different port, hostname or the static site has its own list, so use **Export all mine** to move or back up samples. Browsers can also evict storage under pressure, so export anything you cannot recreate.
-- **Reset to defaults** never deletes samples.
+- Browser storage is per address. A different port, hostname or the static site has its own list, so use **Export all mine** (it includes folders) to move or back up samples. Browsers can also evict storage under pressure, so export anything you cannot recreate.
+- **Reset to defaults** never deletes samples or folders.
 - Each sample can be up to 8 MB.
+- The menu uses the browser's popover feature (Chrome and Edge 114, Safari 17, Firefox 125 or newer).
 
 ## Run it locally
 
@@ -213,7 +230,7 @@ The UI is the same code in both modes. It calls `api/process` on the server, or 
 - Whitespace around text is trimmed.
 - Types are not inferred. Everything is a `string`.
 - A single sample cannot show that a field is optional. Paste several items or responses for better results.
-- The team library has no authentication or per-user ownership. If `shared_write` is on, anyone who can reach the server can change it.
+- The team library has no authentication or per-user ownership. If `shared_write` is on, anyone who can reach the server can change it. Folders are one level deep.
 
 ## Development
 

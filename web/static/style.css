@@ -82,9 +82,16 @@ body.dragging { cursor: col-resize; user-select: none; }
 .pane > h2 { margin: 0; padding: 0 12px; display: flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--muted); }
 .panehead { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; padding: 4px 12px; }
 .panehead h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); }
-.head-actions { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.head-actions { display: flex; gap: 6px; flex: none; }
+.menu-btn { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 130px; min-width: 0; max-width: 340px; padding: 2px 8px; font-size: 13px; text-align: left; }
+.menu-btn .caret { margin-left: auto; color: var(--muted); font-size: 11px; flex: none; }
+.menu-btn[aria-expanded="true"] { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+.menu-btn .btn-label { font-weight: 600; }
+.menu-btn .btn-label[hidden] { display: none; }
+.active-sample .afolder { color: var(--muted); font-weight: 400; white-space: nowrap; }
 .head-actions button { font-size: 12px; padding: 2px 8px; }
-.active-sample { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 90px; min-width: 0; font-size: 13px; }
+.active-sample { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
+.active-sample:empty { display: none; }
 .active-sample .aname { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .active-sample .awhere { color: var(--muted); font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 .active-sample .adirty { color: var(--attr); font-size: 12px; }
@@ -199,9 +206,6 @@ dialog.modal fieldset { border: 1px solid var(--line); border-radius: 6px; margi
 dialog.modal fieldset[hidden] { display: none; }
 .tagrow { display: flex; align-items: center; gap: 10px; }
 
-dialog.panel[open] { display: flex; flex-direction: column; width: min(780px, 94vw); max-height: 80vh; padding: 0; margin-top: 8vh; }
-.sw-head { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); }
-.sw-head input { flex: 1; }
 .sw-body { flex: 1; overflow: auto; min-height: 120px; }
 #sw-list { list-style: none; margin: 0; padding: 4px 0; }
 .sw-group { padding: 10px 14px 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
@@ -226,3 +230,23 @@ dialog.panel[open] { display: flex; flex-direction: column; width: min(780px, 94
   background: var(--ink); color: var(--surface); padding: 8px 16px; border-radius: 6px; font-size: 13px; box-shadow: 0 6px 24px rgba(0, 0, 0, .3); }
 .toast.bad { background: var(--err); color: #fff; }
 .toast[hidden] { display: none; }
+
+/* the Samples menu: a popover anchored under its button (top layer, so panes can't clip it) */
+.menu { position: fixed; inset: auto; margin: 0; padding: 0; width: min(480px, 94vw); max-height: min(72vh, 680px);
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); box-shadow: 0 14px 44px rgba(0, 0, 0, .3); }
+.menu:popover-open { display: flex; flex-direction: column; }
+.sw-head { padding: 10px; border-bottom: 1px solid var(--line); }
+.sw-head input { width: 100%; font: inherit; color: inherit; background: var(--field); border: 1px solid var(--line); border-radius: 4px; padding: 6px 9px; }
+.sw-head input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+.sw-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.sw-tags[hidden] { display: none; }
+.chipbtn { cursor: pointer; font: inherit; font: 600 11px/18px var(--mono); }
+.chipbtn[aria-pressed="true"] { background: var(--c); color: var(--surface); border-color: var(--c); }
+.sw-group { display: flex; align-items: center; gap: 8px; padding: 10px 14px 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.sw-group button { margin-left: auto; font-size: 11px; padding: 0 7px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.sw-note.indent { padding-left: 36px; }
+.frow .sopen { font-weight: 600; }
+.fcaret { width: 1em; color: var(--muted); flex: none; }
+.fcount { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 400; }
+.srow.indent .sopen { padding-left: 34px; }
+.sw-foot .hint { margin-left: 0; flex-basis: 100%; }

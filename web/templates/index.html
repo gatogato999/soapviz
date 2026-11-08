@@ -24,9 +24,12 @@
   <section class="pane" aria-labelledby="h-xml">
     <div class="panehead">
       <h2 id="h-xml">XML</h2>
-      <span id="active-sample" class="active-sample" aria-live="polite"></span>
+      <button type="button" id="samples-btn" class="menu-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="sw-menu" title="Open or manage saved samples (Ctrl+K)">
+        <span id="active-sample" class="active-sample"></span>
+        <span class="btn-label">Samples</span>
+        <span class="caret" aria-hidden="true">▾</span>
+      </button>
       <div class="head-actions">
-        <button type="button" id="samples-btn" aria-haspopup="dialog" title="Open or manage samples (Ctrl+K)">Samples</button>
         <button type="button" id="save-btn" title="Save (Ctrl+S)">Save</button>
         <button type="button" id="saveas-btn" title="Save as a new sample">Save as…</button>
       </div>
@@ -71,21 +74,21 @@
 </main>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
-<dialog id="dlg-switch" class="modal panel" aria-label="Samples">
+<div id="sw-menu" class="menu" popover="manual" role="dialog" aria-label="Samples">
   <div class="sw-head">
     <input id="sw-filter" type="search" role="combobox" aria-expanded="true" aria-controls="sw-list" aria-autocomplete="list"
-           placeholder="Filter by name or tag" aria-label="Filter samples" autocomplete="off" spellcheck="false">
-    <button type="button" id="sw-close">Close</button>
+           placeholder="Filter by name, or #tag" aria-label="Filter samples by name, or #tag" autocomplete="off" spellcheck="false">
   </div>
+  <div id="sw-tags" class="sw-tags" role="group" aria-label="Filter by tag" hidden></div>
   <div class="sw-body"><ul id="sw-list" role="listbox" aria-label="Samples"></ul></div>
   <div class="sw-foot">
     <button type="button" id="sw-import">Import…</button>
     <button type="button" id="sw-export">Export all mine</button>
     <button type="button" id="sw-clear" class="danger-hover">Delete all mine</button>
-    <span class="hint">Ctrl+K to open, Enter to switch back to the last sample</span>
+    <span class="hint">Ctrl+K opens this. Enter switches back to the last sample.</span>
   </div>
   <input type="file" id="sw-file" accept=".xml,.json,text/xml,application/xml,application/json" multiple hidden>
-</dialog>
+</div>
 
 <dialog id="dlg-save" class="modal" aria-labelledby="dlg-save-title">
   <form method="dialog" id="save-form">
@@ -95,6 +98,10 @@
     </label>
     <label class="field">Tag <small>optional, 1 to 4 letters</small>
       <span class="tagrow"><input id="save-tag" type="text" maxlength="4" size="6" autocomplete="off" spellcheck="false" placeholder="Req"><span id="save-chip"></span></span>
+    </label>
+    <label class="field">Folder <small>optional; type a new name to create one</small>
+      <input id="save-folder" type="text" maxlength="80" list="folder-list" autocomplete="off" spellcheck="false">
+      <datalist id="folder-list"></datalist>
     </label>
     <fieldset id="save-where" hidden>
       <legend>Save to</legend>
@@ -106,6 +113,20 @@
     <div class="actions">
       <button value="cancel" formnovalidate>Cancel</button>
       <button value="ok" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-folder" class="modal" aria-labelledby="dlg-folder-title">
+  <form method="dialog" id="folder-form">
+    <h3 id="dlg-folder-title">New folder</h3>
+    <label class="field">Folder name
+      <input id="folder-name" type="text" maxlength="80" autocomplete="off" spellcheck="false">
+    </label>
+    <p id="folder-error" class="err" role="alert"></p>
+    <div class="actions">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="ok" class="primary">OK</button>
     </div>
   </form>
 </dialog>

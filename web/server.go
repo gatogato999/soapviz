@@ -59,7 +59,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/shared", s.sharedList)
 	mux.HandleFunc("GET /api/shared/sample", s.sharedGet)
 	mux.HandleFunc("PUT /api/shared/sample", s.sharedPut)
+	mux.HandleFunc("PATCH /api/shared/sample", s.sharedMove)
 	mux.HandleFunc("DELETE /api/shared/sample", s.sharedDelete)
+	mux.HandleFunc("PUT /api/shared/folder", s.folderCreate)
+	mux.HandleFunc("PATCH /api/shared/folder", s.folderRename)
+	mux.HandleFunc("DELETE /api/shared/folder", s.folderDelete)
 	return mux
 }
 
@@ -107,7 +111,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 type apiError struct {
 	Error     string `json:"error"`
-	Code      string `json:"code,omitempty"`      // exists | conflict
+	Code      string `json:"code,omitempty"`      // exists | conflict | notempty
 	UpdatedAt int64  `json:"updatedAt,omitempty"` // current version, with code "conflict"
 }
 
@@ -139,6 +143,8 @@ func sharedFail(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusNotFound, apiError{Error: err.Error()})
 	case errors.Is(err, shared.ErrExists):
 		writeJSON(w, http.StatusConflict, apiError{Error: err.Error(), Code: "exists"})
+	case errors.Is(err, shared.ErrNotEmpty):
+		writeJSON(w, http.StatusConflict, apiError{Error: err.Error(), Code: "notempty"})
 	case errors.As(err, &ce):
 		writeJSON(w, http.StatusConflict, apiError{Error: err.Error(), Code: "conflict", UpdatedAt: ce.UpdatedAt})
 	case errors.Is(err, shared.ErrTooLarge):
@@ -155,25 +161,21 @@ func (s *Server) sharedList(w http.ResponseWriter, r *http.Request) {
 	if !s.sharedEnabled(w) {
 		return
 	}
-	infos, _, err := s.shared.List()
+	l, _, err := s.shared.List()
 	if err != nil {
 		sharedFail(w, err)
 		return
 	}
-	if infos == nil {
-		infos = []shared.Info{}
-	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, struct {
-		Samples []shared.Info `json:"samples"`
-	}{infos})
+	writeJSON(w, http.StatusOK, l)
 }
 
 func (s *Server) sharedGet(w http.ResponseWriter, r *http.Request) {
 	if !s.sharedEnabled(w) {
 		return
 	}
-	smp, err := s.shared.Get(r.URL.Query().Get("name"))
+	q := r.URL.Query()
+	smp, err := s.shared.Get(q.Get("folder"), q.Get("name"))
 	if err != nil {
 		sharedFail(w, err)
 		return
@@ -182,28 +184,63 @@ func (s *Server) sharedGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, smp)
 }
 
+func decodeBody(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: "bad request: " + err.Error()})
+		return false
+	}
+	return true
+}
+
 func (s *Server) sharedPut(w http.ResponseWriter, r *http.Request) {
 	if !s.sharedWritable(w) {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, int64(s.cfg.MaxBodyMB)<<20+4096)
 	var req struct {
 		Tag         string `json:"tag"`
 		XML         string `json:"xml"`
 		IfUpdatedAt *int64 `json:"ifUpdatedAt"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiError{Error: "bad request: " + err.Error()})
+	if !decodeBody(w, r, int64(s.cfg.MaxBodyMB)<<20+4096, &req) {
 		return
 	}
-	name := r.URL.Query().Get("name")
-	info, err := s.shared.Put(name, req.Tag, req.XML, req.IfUpdatedAt)
+	q := r.URL.Query()
+	info, err := s.shared.Put(q.Get("folder"), q.Get("name"), req.Tag, req.XML, req.IfUpdatedAt)
 	if err != nil {
 		sharedFail(w, err)
 		return
 	}
 	// There is no authentication, so leave a trail of who changed what (never the content).
-	log.Printf("team samples: wrote %q (%d bytes) from %s", name, info.Bytes, r.RemoteAddr)
+	log.Printf("team samples: wrote %q in %q (%d bytes) from %s", info.Name, info.Folder, info.Bytes, r.RemoteAddr)
+	writeJSON(w, http.StatusOK, info)
+}
+
+// sharedMove renames, retags and/or moves a sample to another folder.
+func (s *Server) sharedMove(w http.ResponseWriter, r *http.Request) {
+	if !s.sharedWritable(w) {
+		return
+	}
+	var req struct {
+		Folder      string `json:"folder"`
+		Name        string `json:"name"`
+		Tag         string `json:"tag"`
+		IfUpdatedAt *int64 `json:"ifUpdatedAt"`
+	}
+	if !decodeBody(w, r, 4096, &req) {
+		return
+	}
+	if req.IfUpdatedAt == nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: "ifUpdatedAt is required"})
+		return
+	}
+	q := r.URL.Query()
+	info, err := s.shared.Move(q.Get("folder"), q.Get("name"), shared.Target{Folder: req.Folder, Name: req.Name, Tag: req.Tag}, *req.IfUpdatedAt)
+	if err != nil {
+		sharedFail(w, err)
+		return
+	}
+	log.Printf("team samples: moved %q/%q to %q/%q from %s", q.Get("folder"), q.Get("name"), info.Folder, info.Name, r.RemoteAddr)
 	writeJSON(w, http.StatusOK, info)
 }
 
@@ -211,11 +248,60 @@ func (s *Server) sharedDelete(w http.ResponseWriter, r *http.Request) {
 	if !s.sharedWritable(w) {
 		return
 	}
-	name := r.URL.Query().Get("name")
-	if err := s.shared.Delete(name); err != nil {
+	q := r.URL.Query()
+	if err := s.shared.Delete(q.Get("folder"), q.Get("name")); err != nil {
 		sharedFail(w, err)
 		return
 	}
-	log.Printf("team samples: deleted %q from %s", name, r.RemoteAddr)
+	log.Printf("team samples: deleted %q in %q from %s", q.Get("name"), q.Get("folder"), r.RemoteAddr)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) folderCreate(w http.ResponseWriter, r *http.Request) {
+	if !s.sharedWritable(w) {
+		return
+	}
+	name := r.URL.Query().Get("name")
+	if err := s.shared.CreateFolder(name); err != nil {
+		sharedFail(w, err)
+		return
+	}
+	log.Printf("team samples: created folder %q from %s", name, r.RemoteAddr)
+	writeJSON(w, http.StatusOK, struct {
+		Name string `json:"name"`
+	}{name})
+}
+
+func (s *Server) folderRename(w http.ResponseWriter, r *http.Request) {
+	if !s.sharedWritable(w) {
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if !decodeBody(w, r, 4096, &req) {
+		return
+	}
+	old := r.URL.Query().Get("name")
+	if err := s.shared.RenameFolder(old, req.Name); err != nil {
+		sharedFail(w, err)
+		return
+	}
+	log.Printf("team samples: renamed folder %q to %q from %s", old, req.Name, r.RemoteAddr)
+	writeJSON(w, http.StatusOK, struct {
+		Name string `json:"name"`
+	}{req.Name})
+}
+
+func (s *Server) folderDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.sharedWritable(w) {
+		return
+	}
+	name := r.URL.Query().Get("name")
+	if err := s.shared.DeleteFolder(name); err != nil {
+		sharedFail(w, err)
+		return
+	}
+	log.Printf("team samples: deleted folder %q from %s", name, r.RemoteAddr)
 	w.WriteHeader(http.StatusNoContent)
 }
