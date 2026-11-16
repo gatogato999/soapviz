@@ -36,6 +36,7 @@ Reading a SOAP payload as one long line of XML is slow, and hand-writing the Go 
 - Saved samples: name, tag and group the XML you use often in folders, and switch with Ctrl+K without copy and paste
 - Team samples: a shared folder on the server that everyone using it can open (and, if you allow it, add to)
 - Light, dim and dark themes; draggable, keyboard-resizable panes
+- Show or hide the XML and Tree panes (**Show** in the top bar) to give the Go output the whole window, handy when you only need the json tags of a request you pasted. Both are shown by default, and your choice is remembered per browser.
 - Your theme, options and pane widths are saved in your own browser
 - Runs three ways: in the browser (WebAssembly), as a local Go binary, or as a shared server for a team
 
@@ -118,7 +119,7 @@ Nothing is shared between places in this mode, so the same shape that appears tw
 
 ## Samples, folders and tags
 
-The **Samples** button above the editor is a toggle menu, and it shows the sample you have open (`Req GetStatement ●` means unsaved changes). Click it, or press **Ctrl+K**, to open the menu; click outside, press Esc, or click again to close it. Press **Ctrl+S** to save, and **Enter** right after Ctrl+K to jump back to the sample you came from.
+The **Samples** button in the top bar (with **Save** and **Save as…**, so they stay reachable when the XML pane is hidden) is a toggle menu, and it shows the sample you have open (`Req GetStatement ●` means unsaved changes). Click it, or press **Ctrl+K**, to open the menu; click outside, press Esc, or click again to close it. Press **Ctrl+S** to save, and **Enter** right after Ctrl+K to jump back to the sample you came from.
 
 Saving is always explicit, so editing a vendor's original in the tree never changes it until you press Save (use **Save as** for a variant). Switching away with unsaved changes asks first.
 
@@ -148,7 +149,7 @@ Drop files or folders in and they appear for everyone; an admin can reorganize t
 Things to know:
 - Samples in your browser are stored unencrypted in your browser profile. Treat real payloads accordingly, and use **Delete all mine** on a shared machine.
 - Browser storage is per address. A different port, hostname or the static site has its own list, so use **Export all mine** (it includes folders) to move or back up samples. Browsers can also evict storage under pressure, so export anything you cannot recreate.
-- **Reset to defaults** never deletes samples or folders.
+- **Reset to defaults** restores the theme, options, pane choices and widths. It never deletes samples or folders.
 - Each sample can be up to 8 MB.
 - The menu uses the browser's popover feature (Chrome and Edge 114, Safari 17, Firefox 125 or newer).
 

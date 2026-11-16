@@ -17,6 +17,7 @@ const THEMES = ["light", "dim", "dark"];
 const CASES = ["none", "snake", "camel"];
 const FALLBACK = {
   theme: "dim",
+  view: { xml: true, tree: true }, // which panes are shown; the Go pane always is
   gen: { envelope: false, namespaces: false, json: false, jsonCase: "snake", omitEmpty: false, inline: false, root: "", pkg: "" },
 };
 let defaults = FALLBACK;
@@ -32,8 +33,10 @@ function readSaved() {
 
 // Saved values win, but only if they are valid; anything else falls back to the default.
 function effective(base, saved) {
-  const out = { theme: base.theme, gen: { ...base.gen } };
+  const out = { theme: base.theme, view: { ...base.view }, gen: { ...base.gen } };
   if (THEMES.includes(saved.theme)) out.theme = saved.theme;
+  const v = saved.view || {};
+  for (const k of ["xml", "tree"]) if (typeof v[k] === "boolean") out.view[k] = v[k];
   const g = saved.gen || {};
   for (const k of ["envelope", "namespaces", "json", "omitEmpty", "inline"]) if (typeof g[k] === "boolean") out.gen[k] = g[k];
   if (CASES.includes(g.jsonCase)) out.gen.jsonCase = g.jsonCase;
@@ -47,7 +50,7 @@ function currentTheme() {
 
 function savePrefs() {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: currentTheme(), gen: genOpts() }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: currentTheme(), view, gen: genOpts() }));
   } catch {}
 }
 
@@ -89,6 +92,7 @@ function syncJSONControls() {
 
 function setStatus(msg, bad) {
   statusEl.textContent = msg;
+  statusEl.title = msg; // the bar truncates long messages
   statusEl.classList.toggle("bad", !!bad);
 }
 
@@ -323,7 +327,9 @@ $("#reset").addEventListener("click", () => {
   } catch {}
   showTheme(defaults.theme);
   showGen(defaults.gen);
-  ["--c1", "--c2", "--c3"].forEach((v) => panes.style.removeProperty(v));
+  resetWidths();
+  view = { ...defaults.view };
+  applyLayout();
   if (xmlEl.value.trim()) run(null, { renderTree: false });
 });
 
@@ -393,49 +399,126 @@ function setXML(v) {
 xmlEl.addEventListener("scroll", syncScroll);
 
 // ---------------------------------------------------------------------------
-// Resizable panes
+// Panes: show or hide XML and Tree, and resize whatever is shown.
+//
+// Hiding a pane lets the others expand. Each resize handle sits between two
+// *visible* neighbours, so with XML hidden the one remaining handle resizes
+// Tree and Go. Every pane's last width is remembered (W), so showing a hidden
+// pane again brings back the layout it had.
 // ---------------------------------------------------------------------------
-const paneEls = [...panes.querySelectorAll(":scope > .pane")];
+const paneEls = ["#pane-xml", "#pane-tree", "#pane-go"].map($);
+const handles = [...panes.querySelectorAll(":scope > .handle")]; // handle i follows pane i
+const PANE_NAMES = ["XML", "tree", "Go"];
+const DEFAULT_FR = [1, 1.35, 1];
 const MIN_W = 180;
+let view = effective(FALLBACK, readSaved()).view;
+let W = null; // widths of all three panes, in px (used as fr ratios); null until known
+
+const visibleIndexes = () => [...(view.xml ? [0] : []), ...(view.tree ? [1] : []), 2];
 
 function applyWidths(w) {
   w.forEach((v, i) => panes.style.setProperty(`--c${i + 1}`, `${v}fr`)); // px values work as fr ratios
 }
-function currentWidths() {
-  return paneEls.map((p) => p.getBoundingClientRect().width);
-}
-function saveWidths(w) {
-  try { localStorage.setItem(PANES_KEY, JSON.stringify(w)); } catch {}
-}
-function resizeAt(i, start, dx) {
-  // handle i sits between pane i and pane i+1; their sum stays constant
-  const w = start.slice();
-  const total = w[i] + w[i + 1];
-  w[i] = Math.min(Math.max(start[i] + dx, MIN_W), total - MIN_W);
-  w[i + 1] = total - w[i];
-  return w;
+
+// Record the real width of every pane that is on screen. Hidden panes keep their
+// proportion to the visible ones: they are rescaled by the same factor the visible
+// panes grew or shrank by (hiding XML makes Tree and Go wider, and when XML comes
+// back it must return at its old share, not its old pixels).
+function rememberWidths() {
+  const m = paneEls.map((p) => (p.offsetParent !== null ? p.getBoundingClientRect().width : null));
+  const shown = [0, 1, 2].filter((i) => m[i] !== null);
+  if (!shown.length) return;
+  const hidden = [0, 1, 2].filter((i) => m[i] === null);
+  const next = [0, 1, 2].map((i) => m[i]);
+  if (hidden.length) {
+    const sum = (arr, f) => arr.reduce((t, i) => t + f(i), 0);
+    const haveW = W && shown.every((i) => W[i] > 0);
+    const scale = sum(shown, (i) => m[i]) / sum(shown, (i) => (haveW ? W[i] : DEFAULT_FR[i]));
+    hidden.forEach((i) => { next[i] = (W && W[i] > 0 ? W[i] : DEFAULT_FR[i]) * scale; });
+  }
+  W = next;
 }
 
-panes.querySelectorAll(".handle").forEach((h) => {
-  const i = Number(h.dataset.i);
+function saveWidths() {
+  if (W) try { localStorage.setItem(PANES_KEY, JSON.stringify(W)); } catch {}
+}
+
+function resetWidths() {
+  W = null;
+  ["--c1", "--c2", "--c3"].forEach((v) => panes.style.removeProperty(v));
+  try { localStorage.removeItem(PANES_KEY); } catch {}
+}
+
+function resizeAt(a, b, w, dx) {
+  // the handle between panes a and b: their sum stays constant, neither goes under MIN_W
+  const out = w.slice();
+  const total = w[a] + w[b];
+  out[a] = Math.min(Math.max(w[a] + dx, MIN_W), total - MIN_W);
+  out[b] = total - out[a];
+  return out;
+}
+
+// Show exactly the panes in `view`, with one handle between each visible pair.
+function applyLayout() {
+  const root = document.documentElement;
+  root.toggleAttribute("data-hide-xml", !view.xml);
+  root.toggleAttribute("data-hide-tree", !view.tree);
+  $("#view-xml").setAttribute("aria-pressed", String(view.xml));
+  $("#view-tree").setAttribute("aria-pressed", String(view.tree));
+
+  const vis = visibleIndexes();
+  handles.forEach((h) => { h.hidden = true; });
+  vis.slice(0, -1).forEach((a, k) => {
+    const b = vis[k + 1], h = handles[a]; // the handle right after pane a is in the right DOM position
+    h.hidden = false;
+    h.dataset.a = String(a);
+    h.dataset.b = String(b);
+    h.setAttribute("aria-label", `Resize ${PANE_NAMES[a]} and ${PANE_NAMES[b]} panes`);
+  });
+  const cols = [];
+  vis.forEach((i, k) => {
+    if (k) cols.push("8px");
+    cols.push(`var(--c${i + 1}, ${DEFAULT_FR[i]}fr)`);
+  });
+  panes.style.setProperty("--cols", cols.join(" "));
+  syncScroll();
+}
+
+function setView(next) {
+  rememberWidths(); // measure before anything disappears
+  view = next;
+  if (W) applyWidths(W);
+  applyLayout();
+  savePrefs();
+  saveWidths();
+}
+
+$("#view-xml").addEventListener("click", () => setView({ ...view, xml: !view.xml }));
+$("#view-tree").addEventListener("click", () => setView({ ...view, tree: !view.tree }));
+
+handles.forEach((h) => {
   let startX = 0, start = [];
+  const pair = () => [Number(h.dataset.a), Number(h.dataset.b)];
   h.addEventListener("pointerdown", (e) => {
     h.setPointerCapture(e.pointerId);
     startX = e.clientX;
-    start = currentWidths();
+    rememberWidths();
+    start = W.slice();
     h.classList.add("drag");
     document.body.classList.add("dragging");
   });
   h.addEventListener("pointermove", (e) => {
     if (!h.hasPointerCapture(e.pointerId)) return;
-    applyWidths(resizeAt(i, start, e.clientX - startX));
+    const [a, b] = pair();
+    W = resizeAt(a, b, start, e.clientX - startX);
+    applyWidths(W);
   });
   const end = (e) => {
     if (!h.hasPointerCapture(e.pointerId)) return;
     h.releasePointerCapture(e.pointerId);
     h.classList.remove("drag");
     document.body.classList.remove("dragging");
-    saveWidths(currentWidths());
+    saveWidths();
   };
   h.addEventListener("pointerup", end);
   h.addEventListener("pointercancel", end);
@@ -444,15 +527,23 @@ panes.querySelectorAll(".handle").forEach((h) => {
     const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
     if (!dx) return;
     e.preventDefault();
-    const w = resizeAt(i, currentWidths(), dx);
-    applyWidths(w);
-    saveWidths(w);
+    rememberWidths();
+    const [a, b] = pair();
+    W = resizeAt(a, b, W, dx);
+    applyWidths(W);
+    saveWidths();
   });
-  h.addEventListener("dblclick", () => {
-    ["--c1", "--c2", "--c3"].forEach((v) => panes.style.removeProperty(v));
-    try { localStorage.removeItem(PANES_KEY); } catch {}
-  });
+  h.addEventListener("dblclick", resetWidths);
 });
+
+try {
+  const saved = JSON.parse(localStorage.getItem(PANES_KEY) || "null");
+  if (Array.isArray(saved) && saved.length === 3 && saved.every((v) => typeof v === "number" && v > 0)) {
+    W = saved;
+    applyWidths(W);
+  }
+} catch {}
+applyLayout();
 
 // ---------------------------------------------------------------------------
 // Startup: server defaults, then this browser's saved choices on top.
@@ -471,10 +562,8 @@ async function init() {
   const prefs = effective(defaults, readSaved());
   showTheme(prefs.theme);
   showGen(prefs.gen);
-  try {
-    const saved = JSON.parse(localStorage.getItem(PANES_KEY) || "null");
-    if (Array.isArray(saved) && saved.length === 3 && saved.every((v) => v > 0)) applyWidths(saved);
-  } catch {}
+  view = prefs.view;
+  applyLayout();
   paintXML();
   window.soapvizSamples.init(serverCfg); // restores the last open sample into an empty editor
 }

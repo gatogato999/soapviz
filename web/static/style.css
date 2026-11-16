@@ -46,9 +46,9 @@ body {
 }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
-.bar { display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .bar h1 { margin: 0; font: 600 16px var(--mono); letter-spacing: 0; }
-.status { flex: 1; color: var(--muted); font-size: 13px; min-height: 1.45em; }
+.status { flex: 1 1 120px; min-width: 0; color: var(--muted); font-size: 13px; min-height: 1.45em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status.bad { color: var(--err); }
 
 button, select, input[type="text"] { font: inherit; }
@@ -60,6 +60,11 @@ button.primary { background: var(--focus); border-color: var(--focus); color: #f
 button.primary:hover { filter: brightness(1.08); }
 button.danger-hover:hover:not(:disabled) { color: var(--err); border-color: var(--err); }
 
+.viewtoggle { display: flex; align-items: center; gap: 4px; }
+.viewlabel { color: var(--muted); font-size: 12px; margin-right: 2px; }
+.vt { font-size: 12px; padding: 2px 9px; }
+.vt[aria-pressed="true"] { background: var(--hover); border-color: var(--muted); }
+.vt[aria-pressed="false"] { background: transparent; color: var(--muted); border-style: dashed; text-decoration: line-through; }
 .swatches { display: flex; gap: 8px; }
 .sw { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 1px solid var(--muted); }
 .sw[data-theme="light"] { background: linear-gradient(135deg, #fafbfc 50%, #eef1f4 50%); }
@@ -69,8 +74,9 @@ button.danger-hover:hover:not(:disabled) { color: var(--err); border-color: var(
 
 .panes {
   flex: 1; min-height: 0; display: grid; padding: 8px;
-  grid-template-columns: var(--c1, 1fr) 8px var(--c2, 1.35fr) 8px var(--c3, 1fr);
+  grid-template-columns: var(--cols, var(--c1, 1fr) 8px var(--c2, 1.35fr) 8px var(--c3, 1fr));
 }
+html[data-hide-xml] #pane-xml, html[data-hide-tree] #pane-tree, .handle[hidden] { display: none; }
 .handle { position: relative; cursor: col-resize; touch-action: none; }
 .handle::before { content: ""; position: absolute; inset: 0 3px; border-radius: 2px; background: transparent; }
 .handle:hover::before, .handle:focus-visible::before, .handle.drag::before { background: var(--focus); }
@@ -78,18 +84,17 @@ button.danger-hover:hover:not(:disabled) { color: var(--err); border-color: var(
 body.dragging { cursor: col-resize; user-select: none; }
 
 .pane { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
-.pane > h2, .panehead { min-height: 40px; border-bottom: 1px solid var(--line); }
+.pane > h2 { min-height: 40px; border-bottom: 1px solid var(--line); }
 .pane > h2 { margin: 0; padding: 0 12px; display: flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--muted); }
-.panehead { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; padding: 4px 12px; }
-.panehead h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); }
-.head-actions { display: flex; gap: 6px; flex: none; }
-.menu-btn { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 130px; min-width: 0; max-width: 340px; padding: 2px 8px; font-size: 13px; text-align: left; }
+.bar-samples { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bar-samples button, .vt, .bar > button { white-space: nowrap; }
+.bar-samples button { font-size: 12px; padding: 2px 8px; }
+.menu-btn { display: inline-flex; align-items: center; gap: 8px; flex: 0 1 300px; min-width: 120px; padding: 2px 8px; font-size: 13px; text-align: left; }
 .menu-btn .caret { margin-left: auto; color: var(--muted); font-size: 11px; flex: none; }
 .menu-btn[aria-expanded="true"] { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
 .menu-btn .btn-label { font-weight: 600; }
 .menu-btn .btn-label[hidden] { display: none; }
 .active-sample .afolder { color: var(--muted); font-weight: 400; white-space: nowrap; }
-.head-actions button { font-size: 12px; padding: 2px 8px; }
 .active-sample { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
 .active-sample:empty { display: none; }
 .active-sample .aname { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
